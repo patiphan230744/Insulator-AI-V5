@@ -45,7 +45,7 @@
 
 <div class="card">
 <h3>1. โครงการและจุดตรวจ</h3>
-<label for="scanProject">โครงการที่สำรวจ</label><select id="scanProject" onchange="chooseProject(this.value)"></select><p id="v5ProjectHelp" class="note">กรุณาเลือกโครงการสำรวจจริง</p>
+<label for="scanProject">โครงการที่สำรวจ</label><select id="scanProject" onchange="chooseProject(this.value)"></select>
 <button class="btn light" onclick="go('projectsPage')">＋ สร้าง / จัดการโครงการ</button>
 <label for="existingPole">เลือกเสาไฟฟ้าที่มีอยู่ (หรือกรอกเสาใหม่)</label>
 <select id="existingPole" onchange="V5.chooseExistingPole(this.value)"><option value="">＋ เสาใหม่ / กรอกรหัสเอง</option></select>
@@ -56,7 +56,7 @@
 <label>สถานะงาน</label><select id="workStatus"><option value="inspected">ตรวจแล้ว / รอยืนยัน</option><option value="followup">ต้องตรวจซ้ำ</option><option value="completed">ยืนยันผลแล้ว</option></select>
 <label for="units">จำนวนลูกถ้วยจริงบนเสานี้ (ปรับได้ ไม่จำกัดไว้ 3 ลูก)</label>
 <input id="units" type="number" min="1" max="500" step="1" placeholder="เช่น 6" oninput="V5.updateInsulatorOptions()">
-<button id="savePoleButton" class="btn light" type="button" onclick="V5.savePole()">💾 บันทึกข้อมูลเสา / จำนวนลูกถ้วย</button>
+<button class="btn light" type="button" onclick="V5.savePole()">💾 บันทึกข้อมูลเสา / จำนวนลูกถ้วย</button>
 <label for="insulatorSelect">ลูกถ้วยที่จะตรวจสอบ</label><select id="insulatorSelect"><option value="">กรุณาระบุรหัสเสาและจำนวนลูกถ้วยก่อน</option></select>
 <label>หมายเหตุการสำรวจ</label><textarea id="remarks" placeholder="บันทึกรายละเอียด"></textarea>
 <label>ชื่อผู้ตรวจสอบ</label>
@@ -66,7 +66,7 @@
 <button class="btn" onclick="document.getElementById('cameraInput').click()">📸 ถ่ายภาพด้วยกล้อง</button>
 <button class="btn light" onclick="document.getElementById('galleryInput').click()">🖼️ เลือกจากแกลเลอรี</button>
 <canvas id="canvas"></canvas>
-<p id="photoStatus" class="note">ยังไม่ได้เลือกภาพ</p><button class="btn light" type="button" onclick="V5.resetInspectionDraft(true)">🧹 ล้างภาพและผลการตรวจที่ยังไม่บันทึก</button>
+<p id="photoStatus" class="note">ยังไม่ได้เลือกภาพ</p>
 </div>
 
 <div class="card">
@@ -94,7 +94,6 @@
 <button id="saveBtn" class="btn" onclick="saveResult()">💾 บันทึกผลการตรวจสอบ</button>
 <div id="saveStatus"></div>
 </div>
-<div id="v5SavedActions" class="card saved-actions" style="display:none" aria-live="polite"><h3>✅ บันทึกผลสำเร็จ</h3><p id="v5SavedSummary"></p><button class="btn" onclick="V5.nextInsulator()">➡️ ตรวจลูกถ้วยถัดไป (เสาเดิม)</button><button class="btn light" onclick="V5.nextPole()">📍 ตรวจเสาไฟฟ้าต้นถัดไป</button><button class="btn light" onclick="go('history')">🕒 ดูประวัติ</button></div>
 </div>
 </section>
 
@@ -117,15 +116,16 @@
 <section id="history" class="page">
 <h2>ประวัติการตรวจสอบ</h2>
 <div class="card">
-<label>กรองโครงการ</label><select id="historyProject" onchange="showHistory()"></select><label class="legacy-toggle"><input id="includeLegacyHistory" type="checkbox" onchange="showHistory()"> แสดงประวัติเดิมที่ยังไม่ได้จัดเข้าโครงการ (ไม่ใช่โครงการจริง)</label>
+<label>กรองโครงการ</label><select id="historyProject" onchange="showHistory()"></select>
 <label>กรองสถานะ</label><select id="historyStatus" onchange="showHistory()"><option value="all">ทุกสถานะ</option><option value="inspected">ตรวจแล้ว / รอยืนยัน</option><option value="followup">ต้องตรวจซ้ำ</option><option value="completed">ยืนยันผลแล้ว</option></select>
-<label for="search">ค้นหาประวัติ</label><input id="search" placeholder="รหัสเสา / ผู้ตรวจ / Latitude, Longitude" oninput="showHistory()"><p class="note">ค้นหาได้ด้วยรหัสเสา ชื่อผู้ตรวจ หรือพิกัด เช่น 14.350000, 100.570000 (พิกัดคู่ค้นหาในระยะประมาณ 15 เมตร)</p>
+<label for="historyInsulator">กรองลูกถ้วยที่ตรวจสอบ</label><select id="historyInsulator" onchange="showHistory()"><option value="all">ลูกถ้วยทุกลูก</option></select>
+<label for="search">ค้นหาประวัติ</label><input id="search" placeholder="รหัสเสา / รหัสลูกถ้วย / ผู้ตรวจ / Latitude, Longitude" oninput="showHistory()"><p class="note">ค้นหาได้ด้วยรหัสเสา รหัสลูกถ้วย ชื่อผู้ตรวจ หรือพิกัด เช่น 14.350000, 100.570000 (พิกัดคู่ค้นหาในระยะประมาณ 15 เมตร)</p>
 <button class="btn light" onclick="exportCSV()">📊 ส่งออก CSV จากตัวกรอง</button><p id="historySummary" class="note"></p>
 <div id="historyList">กำลังโหลดประวัติ</div>
 </div>
 <div class="card">
-<h3>ประวัติส่วนรวม (กำลังพัฒนา)</h3>
-<p class="note">ขณะนี้ยังแสดงข้อมูลที่เก็บในเครื่องเท่านั้น การแชร์โครงการระหว่างบัญชี Firebase ยังไม่ได้เปิดใช้</p>
+<h3>ประวัติส่วนรวม</h3>
+<p class="note">การดูประวัติจากโทรศัพท์เครื่องอื่นต้องเชื่อมต่อเซิร์ฟเวอร์และฐานข้อมูลส่วนกลางก่อน เวอร์ชันนี้แสดงเฉพาะข้อมูลในเครื่อง</p>
 </div>
 </section>
 
@@ -157,7 +157,7 @@
 <p class="note">API ต้องเปิด CORS สำหรับโดเมนเว็บ และควรยืนยันตัวตนบนเซิร์ฟเวอร์ ห้ามฝัง API secret ในไฟล์ HTML</p>
 <div id="aiSettingsStatus" class="msg info">ยังไม่ได้เชื่อมเซิร์ฟเวอร์ YOLOv8</div></div>
 <div class="card" id="cloudPanel">
-<h3>🔐 บัญชีผู้ใช้และ Firebase Cloud (V5)</h3>
+<h3>🔐 บัญชีผู้ใช้และ Firebase Cloud (V4)</h3>
 <div id="cloudConfigHint" class="msg info">กำลังตรวจสอบ Firebase Configuration และสถานะบัญชี...</div>
 <p id="cloudStatus" class="msg info">กำลังตรวจสอบการตั้งค่า Firebase...</p>
 <div id="authForm">

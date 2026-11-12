@@ -358,7 +358,7 @@ async function saveResult(){
   return;
  }
 
- if(!activeProjectId || activeProjectId==='legacy' || !projects.some(p=>p.id===activeProjectId)){alert('กรุณาสร้างและเลือกโครงการจริงก่อนบันทึก');return;}
+ if(!activeProjectId){alert("กรุณาเลือกโครงการ");return;}
  const pole=$("pole").value.trim();
  const inspector=$("inspector").value.trim();
 
@@ -413,7 +413,8 @@ async function saveResult(){
   await writeRecord(record);
   window.V5.afterInspection(record);
   message("saveStatus","✅ บันทึกและตรวจสอบข้อมูลสำเร็จ","good");
-  window.V5.showSavedActions(record);
+  alert("✅ บันทึกสำเร็จแล้ว เปิดหน้าประวัติเพื่อดูข้อมูล");
+  go("history");
  }catch(error){
   message(
    "saveStatus",
@@ -433,7 +434,22 @@ function dateText(value){
 
 function showHistory(){
  const root=$("historyList");
- const keyword=$("search").value.trim().toLowerCase();
+ const insSelect=$("historyInsulator");
+ // Rebuild the available insulators using the current project/status filters.
+ // Keep the existing selection when possible; never infer missing legacy IDs.
+ if(insSelect){
+  const current=insSelect.value;
+  const project=$("historyProject").value,status=$("historyStatus").value;
+  const eligible=records.filter(r=>(project==='all'||(r.projectId||'legacy')===project)&&
+    (status==='all'||(r.status||'inspected')===status));
+  const ids=[...new Set(eligible.map(r=>r.insulatorId).filter(Boolean))].sort((a,b)=>
+    String(a).localeCompare(String(b),'th',{numeric:true}));
+  const hasUnassigned=eligible.some(r=>!r.insulatorId);
+  insSelect.replaceChildren(new Option('ลูกถ้วยทุกลูก','all'));
+  for(const id of ids)insSelect.add(new Option(id,id));
+  if(hasUnassigned)insSelect.add(new Option('ไม่ระบุลูกถ้วย (ข้อมูลเดิม)','__unassigned__'));
+  insSelect.value=[...insSelect.options].some(o=>o.value===current)?current:'all';
+ }
  root.innerHTML="";
 
  const list=filteredRecords();
@@ -449,12 +465,13 @@ function showHistory(){
   div.className="record";
 
   div.innerHTML=`
-   <h3>${escapeHTML(r.pole)}</h3>
+   <h3>${escapeHTML(r.pole)} · ${r.insulatorId?'ลูกถ้วย '+escapeHTML(r.insulatorId):'ไม่ระบุลูกถ้วย (ข้อมูลเดิม)'}</h3>
    <p>${escapeHTML(dateText(r.date))}</p>
    <img alt="ภาพที่ตรวจสอบ">
    <p>โครงการ: ${escapeHTML(projectName(r.projectId))}</p>
    <p>สถานะ: ${escapeHTML(statusName(r.status))}</p>
-   <p>จำนวนลูกถ้วย: ${r.units==null?'ไม่ระบุ':Number(r.units)}</p>
+   <p>ลูกถ้วยที่ตรวจสอบ: <strong>${r.insulatorId?escapeHTML(r.insulatorId):'ไม่ระบุ (ข้อมูลเดิม)'}</strong></p>
+   <p>จำนวนลูกถ้วยทั้งหมดบนเสา: ${r.units==null?'ไม่ระบุ':Number(r.units)}</p>
    <p>หมายเหตุ: ${escapeHTML(r.remarks||'-')}</p>
    <p>ผู้ตรวจสอบ: ${escapeHTML(r.inspector)}</p>
    <p>ความเสียหาย: ${r.damage==null?"ยังไม่ตรวจ":r.damage+"/5"} ${r.demo?"(DEMO)":""}</p>

@@ -29,7 +29,6 @@
  }
  function refreshExisting(){
   const sel=el('existingPole');if(!sel)return;
-  if(!activeProjectId || activeProjectId==='legacy'){sel.replaceChildren();sel.add(new Option('กรุณาเลือกโครงการก่อน',''));return;}
   const current=el('pole').value.trim();sel.replaceChildren();
   sel.add(new Option('＋ เสาใหม่ / กรอกรหัสเอง',''));
   for(const p of projectPoleList(activeProjectId))sel.add(new Option(p.pole+' — '+(p.units||1)+' ลูก',p.pole));
@@ -38,7 +37,7 @@
  function updateInsulatorOptions(){
   const sel=el('insulatorSelect');const current=sel.value;sel.replaceChildren();
   const pole=el('pole').value.trim();const n=getNumber(el('units').value);
-  if(!activeProjectId || activeProjectId==='legacy' || !pole||!n){sel.add(new Option('เลือกโครงการ รหัสเสา และจำนวนลูกถ้วยก่อน',''));return;}
+  if(!pole||!n){sel.add(new Option('กรอกรหัสเสาและจำนวนลูกถ้วยก่อน',''));return;}
   sel.add(new Option('— เลือกลูกถ้วยที่กำลังตรวจ —',''));
   for(let i=1;i<=n;i++)sel.add(new Option('ลูกที่ '+i+' ('+idAt(pole,i)+')',idAt(pole,i)));
   sel.value=[...sel.options].some(o=>o.value===current)?current:'';
@@ -51,13 +50,13 @@
   refreshExisting();updateInsulatorOptions();
  }
  function chooseExistingPole(pole){
-  if(!pole){el('pole').value='';el('units').value='';clearGPS();updateInsulatorOptions();return;}
+  if(!pole){el('pole').value='';el('units').value='';updateInsulatorOptions();return;}
   el('pole').value=pole;onPoleInput();
  }
  function savePole(silent=false){
   const pole=el('pole').value.trim(),units=getNumber(el('units').value);
   if(!pole||!units){if(!silent)alert('กรุณากรอกรหัสเสาและจำนวนลูกถ้วยที่ถูกต้อง (1–500)');return false;}
-  if(!activeProjectId || activeProjectId==='legacy' || !projects.some(p=>p.id===activeProjectId)){if(!silent)alert('กรุณาเลือกโครงการจริงก่อน');return false;}
+  if(!projects.some(p=>p.id===activeProjectId)){if(!silent)alert('กรุณาเลือกโครงการก่อน');return false;}
   let existing=lookup(activeProjectId,pole);
   const latText=el('lat').value.trim(),lngText=el('lng').value.trim();
   let pos=null;
@@ -75,42 +74,9 @@
   if(r.gps)p.gps=r.gps;
   p.updatedAt=r.date;try{persist();}catch(e){console.warn('Pole metadata not persisted',e)}renderPoleList();
  }
- // Clear only unsaved inspection inputs; the current project/pole/GPS/inspector are retained.
- function resetInspectionDraft(clearRemarks=true){
-  originalImage=null;result=null;
-  for(const id of ['cameraInput','galleryInput'])el(id).value='';
-  const canvas=el('canvas');canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);
-  canvas.style.display='none';el('photoStatus').textContent='ยังไม่ได้เลือกภาพ';
-  el('result').style.display='none';el('resultDetails').replaceChildren();el('saveStatus').replaceChildren();
-  if(clearRemarks)el('remarks').value='';
-  el('workStatus').value='inspected';
- }
- function showSavedActions(r){
-  el('v5SavedActions').style.display='block';
-  el('v5SavedSummary').textContent='บันทึก '+r.insulatorId+' ของเสา '+r.pole+' แล้ว (เก็บในเครื่อง; ส่ง Cloud ผ่านเมนูตั้งค่า)';
-  el('result').style.display='none';
-  el('v5SavedActions').scrollIntoView({behavior:'smooth',block:'nearest'});
- }
- function nextInsulator(){
-  const pole=el('pole').value.trim(),selected=el('insulatorSelect').value;
-  const ids=[...el('insulatorSelect').options].map(o=>o.value).filter(Boolean);
-  const ix=ids.indexOf(selected);
-  resetInspectionDraft();el('v5SavedActions').style.display='none';
-  updateInsulatorOptions();
-  if(ix>=0&&ix<ids.length-1){el('insulatorSelect').value=ids[ix+1];}
-  else {el('insulatorSelect').value='';message('v5PoleNotice','ตรวจครบลำดับลูกถ้วยของเสา '+pole+' แล้ว เลือกลูกที่ต้องการตรวจซ้ำหรือเปลี่ยนเสา','info');}
-  window.scrollTo({top:0,behavior:'smooth'});
- }
- function nextPole(){
-  resetInspectionDraft();el('v5SavedActions').style.display='none';
-  el('pole').value='';el('units').value='';el('insulatorSelect').value='';
-  clearGPS();refreshExisting();updateInsulatorOptions();
-  message('v5PoleNotice','พร้อมตรวจเสาไฟฟ้าต้นใหม่ กรุณาระบุรหัสเสาและพิกัด','info');
-  window.scrollTo({top:0,behavior:'smooth'});
- }
  function renderPoleList(){
   const root=el('v5PoleList');if(!root)return;root.replaceChildren();
-  const ps=activeProjectId?projectPoleList(activeProjectId):[];
+  const ps=projectPoleList(activeProjectId);
   if(!ps.length){root.textContent='โครงการนี้ยังไม่มีเสาที่บันทึกไว้';return;}
   for(const p of ps){
    const rs=getRecords(p.projectId,p.pole);
@@ -189,10 +155,10 @@
  }
  function init(){load();refreshExisting();updateInsulatorOptions();renderPoleList();bindEvents();}
  function bindEvents(){
-  const oldChoose=chooseProject;chooseProject=function(id){const changed=activeProjectId!==id;oldChoose(id);if(changed){resetInspectionDraft();el('v5SavedActions').style.display='none';el('pole').value='';el('units').value='';clearGPS();}syncSelectors();refreshExisting();updateInsulatorOptions();renderPoleList();};
+  const oldChoose=chooseProject;chooseProject=function(id){const changed=activeProjectId!==id;oldChoose(id);if(changed){el('pole').value='';el('units').value='';clearGPS();}refreshExisting();updateInsulatorOptions();renderPoleList();};
   const oldGo=go;go=function(id){oldGo(id);if(id==='scan'){refreshExisting();updateInsulatorOptions();}if(id==='projectsPage')renderPoleList();};
-  const oldCreate=createProject;createProject=function(){oldCreate();syncSelectors();refreshExisting();renderPoleList();};
+  const oldCreate=createProject;createProject=function(){oldCreate();refreshExisting();renderPoleList();};
   const oldDownload=cloudDownload;cloudDownload=async function(){await oldDownload();refreshExisting();renderPoleList();};
  }
- window.V5={init,afterInspection,mapSummaries,savePole,onPoleInput,chooseExistingPole,updateInsulatorOptions,openPole,renderPoleList,cloudPoleItems,importCloudPoles,projectStats,resetInspectionDraft,showSavedActions,nextInsulator,nextPole};
+ window.V5={init,afterInspection,mapSummaries,savePole,onPoleInput,chooseExistingPole,updateInsulatorOptions,openPole,renderPoleList,cloudPoleItems,importCloudPoles,projectStats};
 })();

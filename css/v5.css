@@ -30,9 +30,3 @@ nav button.active{background:#e7f1ff;border-radius:14px 14px 0 0}
 .pole-photo{display:block;width:100%;max-height:280px;object-fit:contain;border-radius:14px;background:#ecf2fb;margin:12px 0 18px}
 .ins-thumb{width:50px;height:56px;object-fit:cover;border-radius:9px;background:#e7eef9}
 .project-progress{height:8px;background:#e3eaf4;border-radius:15px;overflow:hidden;margin-top:12px}.project-progress>div{height:100%;border-radius:15px;background:linear-gradient(90deg,#096bdd,#33a0fa)}
-
-/* V5.1: keep legacy history separate from real survey projects */
-.legacy-toggle{display:flex;align-items:flex-start;gap:10px;font-size:14px;font-weight:normal;line-height:1.5;padding:10px 0;color:#405a7f}
-.legacy-toggle input{width:auto;flex:none;margin:4px 0 0;accent-color:#245fc0}
-.saved-actions{margin-top:14px;border:1px solid #b6e9c9;background:#f4fff8}
-select:disabled,input:disabled,button:disabled{opacity:.55;cursor:not-allowed}
