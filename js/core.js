@@ -358,7 +358,7 @@ async function saveResult(){
   return;
  }
 
- if(!activeProjectId){alert("กรุณาเลือกโครงการ");return;}
+ if(!activeProjectId || activeProjectId==='legacy' || !projects.some(p=>p.id===activeProjectId)){alert('กรุณาสร้างและเลือกโครงการจริงก่อนบันทึก');return;}
  const pole=$("pole").value.trim();
  const inspector=$("inspector").value.trim();
 
@@ -413,8 +413,7 @@ async function saveResult(){
   await writeRecord(record);
   window.V5.afterInspection(record);
   message("saveStatus","✅ บันทึกและตรวจสอบข้อมูลสำเร็จ","good");
-  alert("✅ บันทึกสำเร็จแล้ว เปิดหน้าประวัติเพื่อดูข้อมูล");
-  go("history");
+  window.V5.showSavedActions(record);
  }catch(error){
   message(
    "saveStatus",

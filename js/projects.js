@@ -1,14 +1,14 @@
 const PROJECTS_KEY='INSULATOR_SURVEY_PROJECTS_V1',ACTIVE_KEY='INSULATOR_SURVEY_ACTIVE_V1';
-let projects=[],activeProjectId='legacy';
+let projects=[],activeProjectId='';
 function readProjects(){
  try{const v=JSON.parse(localStorage.getItem(PROJECTS_KEY)||'[]');projects=Array.isArray(v)?v:[]}catch(e){projects=[]}
  if(!projects.some(p=>p.id==='legacy'))projects.unshift({id:'legacy',name:'งานตรวจสอบทั่วไป (ข้อมูลเดิม)',office:'ยังไม่ระบุ',prefix:'LP-',description:'ข้อมูลก่อนเพิ่มระบบโครงการ'});
- try{activeProjectId=localStorage.getItem(ACTIVE_KEY)||'legacy'}catch(e){}
- if(!projects.some(p=>p.id===activeProjectId))activeProjectId='legacy';
+ try{activeProjectId=localStorage.getItem(ACTIVE_KEY)||''}catch(e){}
+ if(!projects.some(p=>p.id===activeProjectId && p.id!=='legacy'))activeProjectId='';
  try{storeProjects()}catch(e){console.warn('Unable to persist projects',e)}
 }
 function storeProjects(){localStorage.setItem(PROJECTS_KEY,JSON.stringify(projects));localStorage.setItem(ACTIVE_KEY,activeProjectId)}
-function projectName(id){return (projects.find(p=>p.id===(id||'legacy'))||{}).name||'ไม่พบโครงการ'}
+function projectName(id){if(!id || id==='legacy')return 'ประวัติเดิม (ยังไม่ได้จัดเข้าโครงการ)';return (projects.find(p=>p.id===id)||{}).name||'ไม่พบโครงการ'}
 function statusName(status){return ({inspected:'ตรวจแล้ว / รอยืนยัน',followup:'ต้องตรวจซ้ำ',completed:'ยืนยันผลแล้ว'})[status]||'ตรวจแล้ว / รอยืนยัน'}
 function createProject(){
  const name=$('pName').value.trim(),office=$('pOffice').value.trim(),prefix=$('pPrefix').value.trim()||'P-';
@@ -22,7 +22,7 @@ function createProject(){
  syncSelectors();renderProjects();refreshDashboard();alert('สร้างโครงการและเลือกใช้งานสำเร็จ');
 }
 function chooseProject(id){
- if(!projects.some(p=>p.id===id))return;
+ if(!id || !projects.some(p=>p.id===id && p.id!=='legacy'))return;
  const old=activeProjectId;activeProjectId=id;
  try{storeProjects()}catch(e){activeProjectId=old;alert('เปลี่ยนโครงการไม่ได้');return}
  syncSelectors();renderProjects();refreshDashboard();
@@ -32,13 +32,13 @@ function removeProject(id){
  if(records.some(r=>r.projectId===id)){alert('โครงการมีประวัติการตรวจอยู่ ไม่อนุญาตให้ลบเพื่อป้องกันข้อมูลสูญหาย');return}
  if(!confirm('ต้องการลบโครงการนี้หรือไม่?'))return;
  const before=projects.slice(),old=activeProjectId;
- projects=projects.filter(p=>p.id!==id);if(activeProjectId===id)activeProjectId='legacy';
+ projects=projects.filter(p=>p.id!==id);if(activeProjectId===id)activeProjectId='';
  try{storeProjects()}catch(e){projects=before;activeProjectId=old;alert('ลบไม่สำเร็จ');return}
  syncSelectors();renderProjects();refreshDashboard();
 }
 function renderProjects(){
  const root=$('projectList');root.replaceChildren();
- for(const p of projects){
+ for(const p of projects.filter(p=>p.id!=='legacy')){
   const count=new Set(records.filter(r=>(r.projectId||'legacy')===p.id).map(r=>String(r.pole).toLowerCase())).size;
   const div=document.createElement('div');div.className='project'+(p.id===activeProjectId?' selected':'');
   const stats=window.V5?.projectStats(p.id)||{total:count,inspected:count};
@@ -48,31 +48,44 @@ function renderProjects(){
   div.querySelector('.remove').onclick=()=>removeProject(p.id);
   root.append(div);
  }
+ if(!projects.some(p=>p.id!=='legacy'))root.textContent='ยังไม่มีโครงการสำรวจจริง กรุณาสร้างโครงการใหม่ก่อนเริ่มตรวจสอบ';
 }
 function syncSelectors(){
+ const realProjects=projects.filter(p=>p.id!=='legacy');
  for(const id of ['scanProject','mapProject','historyProject']){
   const select=$(id),current=select.value;select.replaceChildren();
-  if(id!=='scanProject')select.add(new Option('ทุกโครงการ','all'));
-  for(const p of projects)select.add(new Option(p.office+' — '+p.name,p.id));
-  select.value=id==='scanProject'?activeProjectId:([...select.options].some(o=>o.value===current)?current:'all');
+  if(id==='scanProject')select.add(new Option('— กรุณาเลือกโครงการสำรวจ —',''));
+  else select.add(new Option('ทุกโครงการจริง','all'));
+  for(const p of realProjects)select.add(new Option(p.office+' — '+p.name,p.id));
+  if(id==='scanProject')select.value=realProjects.some(p=>p.id===activeProjectId)?activeProjectId:'';
+  else select.value=[...select.options].some(o=>o.value===current)?current:'all';
  }
+ const scanReady=!!activeProjectId && realProjects.some(p=>p.id===activeProjectId);
+ for(const id of ['existingPole','pole','units','insulatorSelect','savePoleButton']){
+  const input=$(id);if(input)input.disabled=!scanReady;
+ }
+ const notice=$('v5ProjectHelp');if(notice)notice.textContent=scanReady?'เลือกโครงการแล้ว สามารถระบุเสาและลูกถ้วยได้':'กรุณาสร้างหรือเลือกโครงการจริงก่อนเริ่มตรวจสอบ';
 }
 function refreshDashboard(){
  const p=projects.find(p=>p.id===activeProjectId);
- $('activeProjectLabel').textContent=p?p.name+' · '+p.office:'ไม่พบโครงการ';
- const list=records.filter(r=>(r.projectId||'legacy')===activeProjectId);
+ $('activeProjectLabel').textContent=p && p.id!=='legacy'?p.name+' · '+p.office:'ยังไม่ได้เลือกโครงการสำรวจจริง';
+ const list=activeProjectId?records.filter(r=>(r.projectId||'legacy')===activeProjectId):[];
  $('poleTotal').textContent=new Set(list.map(r=>String(r.pole).toLowerCase())).size;
  $('inspectionTotal').textContent=list.length;
  $('criticalTotal').textContent=list.filter(r=>Number(r.damage)>=4).length;
 }
 function filteredRecords(){
  const q=$('search').value.trim().toLowerCase(),p=$('historyProject').value,status=$('historyStatus').value;
+ const includeLegacy=!!$('includeLegacyHistory')?.checked;
  // A pair of coordinates searches a ~15 m radius. Single values can match either coordinate.
  const pair=q.match(/^(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)$/);
  const pairLat=pair?Number(pair[1]):null,pairLng=pair?Number(pair[2]):null;
  const validPair=!!pair && isValidCoordinate(pairLat,pairLng);
  return records.filter(r=>{
-  if((p!=='all'&&(r.projectId||'legacy')!==p)||(status!=='all'&&(r.status||'inspected')!==status))return false;
+  const pid=r.projectId||'legacy';
+  if(pid==='legacy' && !includeLegacy)return false;
+  if(p!=='all' && pid!==p)return false;
+  if(status!=='all'&&(r.status||'inspected')!==status)return false;
   if(!q)return true;
   const lat=Number(r.gps?.lat),lng=Number(r.gps?.lng);
   const hasGPS=r.gps!=null && isValidCoordinate(lat,lng);
