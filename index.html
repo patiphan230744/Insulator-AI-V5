@@ -1,0 +1,205 @@
+
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="theme-color" content="#094498">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Insulator AI V5 — Survey & AI Ready</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/v5.css">
+</head>
+<body>
+
+<header>
+<h1>⚡ Insulator AI <small>V5</small></h1>
+<p>ระบบบริหารงานสำรวจลูกถ้วยไฟฟ้า 22 kV</p>
+</header>
+
+<main>
+<section id="home" class="page active">
+<h2>ภาพรวมงานสำรวจ</h2>
+<div class="card">
+<h3>ยินดีต้อนรับ 👋</h3>
+<p>ระบบทดลองตรวจสอบสภาพลูกถ้วยไฟฟ้า 22 kV</p>
+<div class="msg warn">AI Demo: ผลวิเคราะห์เป็นข้อมูลจำลอง ไม่ได้ตรวจจับความเสียหายจริง</div>
+</div>
+<div class="card"><h3>📁 โครงการที่กำลังใช้งาน</h3><p id="activeProjectLabel">...</p><button class="btn light" onclick="go('projectsPage')">จัดการโครงการสำรวจ</button></div>
+<div class="stats"><div><b id="poleTotal">0</b><small>เสาที่สำรวจ</small></div><div><b id="inspectionTotal">0</b><small>บันทึกทั้งหมด</small></div><div><b id="criticalTotal">0</b><small>ระดับ 4–5 (จำลอง)</small></div></div>
+<div class="grid">
+<button class="tile" onclick="go('scan')"><span>📷</span>ตรวจสอบ</button>
+<button class="tile" onclick="go('mapPage')"><span>🗺️</span>แผนที่</button>
+<button class="tile" onclick="go('history')"><span>🕒</span>ประวัติ</button>
+<button class="tile" onclick="go('projectsPage')"><span>📁</span>โครงการ</button>
+</div>
+<div class="card" style="margin-top:15px">
+<h3>จำนวนรายการที่บันทึก</h3>
+<h1 id="count">0</h1>
+<p id="storageName" class="note">กำลังตรวจสอบระบบจัดเก็บ</p>
+</div>
+</section>
+
+<section id="scan" class="page">
+<h2>ตรวจสอบลูกถ้วย</h2>
+
+<div class="card">
+<h3>1. โครงการและจุดตรวจ</h3>
+<label for="scanProject">โครงการที่สำรวจ</label><select id="scanProject" onchange="chooseProject(this.value)"></select>
+<button class="btn light" onclick="go('projectsPage')">＋ สร้าง / จัดการโครงการ</button>
+<label for="existingPole">เลือกเสาไฟฟ้าที่มีอยู่ (หรือกรอกเสาใหม่)</label>
+<select id="existingPole" onchange="V5.chooseExistingPole(this.value)"><option value="">＋ เสาใหม่ / กรอกรหัสเอง</option></select>
+<div class="msg info" id="v5PoleNotice">เลือกโครงการและกรอกรหัสเสา</div>
+<h3>2. เลือกภาพและลูกถ้วยที่จะตรวจสอบ</h3>
+<label>รหัสเสาไฟฟ้า</label>
+<input id="pole" placeholder="เช่น P-002" oninput="V5.onPoleInput()">
+<label>สถานะงาน</label><select id="workStatus"><option value="inspected">ตรวจแล้ว / รอยืนยัน</option><option value="followup">ต้องตรวจซ้ำ</option><option value="completed">ยืนยันผลแล้ว</option></select>
+<label for="units">จำนวนลูกถ้วยจริงบนเสานี้ (ปรับได้ ไม่จำกัดไว้ 3 ลูก)</label>
+<input id="units" type="number" min="1" max="500" step="1" placeholder="เช่น 6" oninput="V5.updateInsulatorOptions()">
+<button class="btn light" type="button" onclick="V5.savePole()">💾 บันทึกข้อมูลเสา / จำนวนลูกถ้วย</button>
+<label for="insulatorSelect">ลูกถ้วยที่จะตรวจสอบ</label><select id="insulatorSelect"><option value="">กรุณาระบุรหัสเสาและจำนวนลูกถ้วยก่อน</option></select>
+<label>หมายเหตุการสำรวจ</label><textarea id="remarks" placeholder="บันทึกรายละเอียด"></textarea>
+<label>ชื่อผู้ตรวจสอบ</label>
+<input id="inspector" placeholder="ชื่อผู้ตรวจสอบ">
+<input id="cameraInput" type="file" accept="image/*" capture="environment" hidden>
+<input id="galleryInput" type="file" accept="image/*" hidden>
+<button class="btn" onclick="document.getElementById('cameraInput').click()">📸 ถ่ายภาพด้วยกล้อง</button>
+<button class="btn light" onclick="document.getElementById('galleryInput').click()">🖼️ เลือกจากแกลเลอรี</button>
+<canvas id="canvas"></canvas>
+<p id="photoStatus" class="note">ยังไม่ได้เลือกภาพ</p>
+</div>
+
+<div class="card">
+<h3>3. บันทึกพิกัด GPS</h3>
+<div id="gpsStatus" class="msg info">ยังไม่ได้บันทึกพิกัด</div>
+<button class="btn" onclick="getGPS()">📍 ดึงพิกัด GPS จริง</button>
+<button class="btn light" onclick="retryGPS()">🔄 ลอง GPS แบบประหยัดพลังงาน</button>
+
+<label>ละติจูด (Latitude)</label>
+<input id="lat" type="number" step="any" inputmode="decimal" placeholder="เช่น 14.350000">
+<label>ลองจิจูด (Longitude)</label>
+<input id="lng" type="number" step="any" inputmode="decimal" placeholder="เช่น 100.570000">
+
+<button class="btn light" onclick="useManualGPS()">✅ ใช้พิกัดที่กรอก</button>
+<button class="btn light" onclick="clearGPS()">ล้างพิกัด</button>
+<p class="note">สามารถกรอกพิกัดจากแอปแผนที่ได้เองเมื่อ GPS หมดเวลา การกรอกพิกัดเองไม่ใช่การวัด GPS อัตโนมัติ</p>
+</div>
+
+<div class="card">
+<h3>4. วิเคราะห์ด้วย AI</h3><div id="aiModeBanner" class="msg warn">DEMO: ผลจำลองเท่านั้น ไม่ใช่การตรวจจับจริง</div>
+<button id="analyzeBtn" class="btn" onclick="analyze()">🤖 เริ่มจำลองการวิเคราะห์ YOLOv8</button>
+<div id="result" style="display:none">
+<div class="msg warn">ผล AI จำลองเท่านั้น ไม่ควรใช้ตัดสินใจบำรุงรักษาจริง</div>
+<div id="resultDetails"></div>
+<button id="saveBtn" class="btn" onclick="saveResult()">💾 บันทึกผลการตรวจสอบ</button>
+<div id="saveStatus"></div>
+</div>
+</div>
+</section>
+
+<section id="mapPage" class="page">
+<h2>แผนที่ตรวจสอบ</h2>
+<div class="card">
+<label>โครงการที่แสดง</label><select id="mapProject" onchange="loadMap()"></select>
+<p class="note">🟢 ระดับ 0–1 · 🟡 ระดับ 2–3 · 🔴 ระดับ 4–5 (ผล AI จำลอง) · 🔵 ตำแหน่งของฉัน</p>
+ <button class="btn light" onclick="locateMeOnMap(true)">📍 กลับไปตำแหน่งปัจจุบันของฉัน</button>
+ <p id="myMapLocationStatus" class="note" role="status">เมื่อเปิดแผนที่ ระบบจะขออนุญาตเข้าถึงตำแหน่งของคุณ</p>
+ <div id="map"></div>
+<p class="note">หมุดมาจากพิกัดที่บันทึกไว้ในเครื่องจริงหรือกรอกเอง ส่วนสีสถานะมาจากผลวิเคราะห์จำลอง</p>
+</div>
+<div class="card">
+<h3>รายละเอียดเสาไฟฟ้า</h3>
+<div id="mapDetail">แตะหมุดบนแผนที่เพื่อดูรายละเอียด</div>
+</div>
+</section>
+
+<section id="history" class="page">
+<h2>ประวัติการตรวจสอบ</h2>
+<div class="card">
+<label>กรองโครงการ</label><select id="historyProject" onchange="showHistory()"></select>
+<label>กรองสถานะ</label><select id="historyStatus" onchange="showHistory()"><option value="all">ทุกสถานะ</option><option value="inspected">ตรวจแล้ว / รอยืนยัน</option><option value="followup">ต้องตรวจซ้ำ</option><option value="completed">ยืนยันผลแล้ว</option></select>
+<label for="search">ค้นหาประวัติ</label><input id="search" placeholder="รหัสเสา / ผู้ตรวจ / Latitude, Longitude" oninput="showHistory()"><p class="note">ค้นหาได้ด้วยรหัสเสา ชื่อผู้ตรวจ หรือพิกัด เช่น 14.350000, 100.570000 (พิกัดคู่ค้นหาในระยะประมาณ 15 เมตร)</p>
+<button class="btn light" onclick="exportCSV()">📊 ส่งออก CSV จากตัวกรอง</button><p id="historySummary" class="note"></p>
+<div id="historyList">กำลังโหลดประวัติ</div>
+</div>
+<div class="card">
+<h3>ประวัติส่วนรวม</h3>
+<p class="note">การดูประวัติจากโทรศัพท์เครื่องอื่นต้องเชื่อมต่อเซิร์ฟเวอร์และฐานข้อมูลส่วนกลางก่อน เวอร์ชันนี้แสดงเฉพาะข้อมูลในเครื่อง</p>
+</div>
+</section>
+
+<section id="projectsPage" class="page"><h2>จัดการโครงการสำรวจ</h2><div class="card"><h3>สร้างโครงการใหม่</h3>
+<label>ชื่อโครงการ</label><input id="pName" placeholder="สำรวจลูกถ้วย 22 kV">
+<label>การไฟฟ้า / หน่วยงาน</label><input id="pOffice" placeholder="กฟอ.พระนครศรีอยุธยา">
+<label>รายละเอียด</label><textarea id="pDesc"></textarea>
+<label>รหัสนำหน้าเสา</label><input id="pPrefix" value="P-">
+<button class="btn" onclick="createProject()">＋ สร้างโครงการ</button></div>
+<div class="card"><h3>โครงการทั้งหมด</h3><div id="projectList"></div></div><div class="card"><h3>รายการเสาในโครงการที่เลือก</h3><div id="v5PoleList"></div></div></section>
+<section id="poleDetail" class="page">
+<h2>รายละเอียดจุดตรวจ (เสาไฟฟ้า)</h2>
+<div class="card" id="v5PoleDetail">กรุณาเลือกเสาจากหน้าโครงการหรือแผนที่</div>
+<button class="btn light" onclick="go('projectsPage')">← กลับไปหน้างานสำรวจ</button>
+</section>
+<section id="settings" class="page">
+<h2>ตั้งค่า</h2>
+<div class="card">
+<h3>สถานะระบบ</h3>
+<p id="dbStatus">กำลังตรวจสอบ</p>
+<p>AI: ระบบจำลอง</p><p>โหมดในเครื่องยังทำงานได้เสมอ เมื่อตั้งค่า Firebase จะล็อกอินและสำรองข้อมูลออนไลน์แบบส่วนตัวได้</p>
+<p>GPS: ขอพิกัดจากอุปกรณ์หรือกรอกเอง</p>
+</div>
+
+<div class="card"><h3>🤖 การเชื่อมต่อ YOLOv8 API (เตรียมไว้)</h3>
+<p class="note">เลือกโหมดจำลองสำหรับการพัฒนาหน้าจอ หรือกำหนด URL ของเซิร์ฟเวอร์ API จริงผ่าน HTTPS ผล AI จะไม่ถูกแต่งขึ้นเมื่อเซิร์ฟเวอร์ไม่ตอบสนอง</p>
+<label for="aiMode">โหมดประเมิน</label><select id="aiMode" onchange="V5.saveAISettings()"><option value="demo">DEMO — จำลองเพื่อทดสอบ</option><option value="api">YOLOv8 API — โมเดลจริง</option></select>
+<label for="aiEndpoint">API Endpoint (HTTPS)</label><input id="aiEndpoint" inputmode="url" placeholder="https://your-domain.example/api/predict" onchange="V5.saveAISettings()">
+<p class="note">API ต้องเปิด CORS สำหรับโดเมนเว็บ และควรยืนยันตัวตนบนเซิร์ฟเวอร์ ห้ามฝัง API secret ในไฟล์ HTML</p>
+<div id="aiSettingsStatus" class="msg info">ยังไม่ได้เชื่อมเซิร์ฟเวอร์ YOLOv8</div></div>
+<div class="card" id="cloudPanel">
+<h3>🔐 บัญชีผู้ใช้และ Firebase Cloud (V4)</h3>
+<div id="cloudConfigHint" class="msg info">กำลังตรวจสอบ Firebase Configuration และสถานะบัญชี...</div>
+<p id="cloudStatus" class="msg info">กำลังตรวจสอบการตั้งค่า Firebase...</p>
+<div id="authForm">
+<label>อีเมล</label><input id="cloudEmail" type="email" autocomplete="email" placeholder="email@example.com">
+<label>รหัสผ่าน (อย่างน้อย 6 ตัวอักษร)</label><input id="cloudPassword" type="password" autocomplete="current-password" placeholder="รหัสผ่าน">
+<button class="btn" onclick="cloudSignIn()">เข้าสู่ระบบ</button>
+<button class="btn light" onclick="cloudRegister()">ลงทะเบียนบัญชีใหม่</button>
+</div>
+<div id="cloudActions" style="display:none">
+<p id="cloudUser" class="note"></p>
+<button class="btn light" onclick="cloudCheck()">🔎 ตรวจสอบข้อมูลที่อยู่บน Firebase จริง</button>
+<div id="cloudVerify" class="msg info" style="display:none" aria-live="polite"></div>
+<button class="btn" onclick="cloudUpload()">☁️ ส่งสำเนาข้อมูลในเครื่องขึ้น Cloud</button>
+<button class="btn light" onclick="cloudDownload()">⬇️ ดึงข้อมูล Cloud มาเพิ่มในเครื่อง</button>
+<button class="btn light" onclick="cloudSignOut()">ออกจากระบบ</button>
+<p class="note">การซิงก์เป็นแบบกดเอง ไม่ลบข้อมูลเก่าในเครื่อง และยังไม่แชร์ระหว่างผู้ใช้ รูปภาพขนาดใหญ่ยังเก็บในเครื่องเท่านั้น; Cloud จะเก็บข้อมูลสำรวจ พิกัด โครงการ และผล AI จำลอง โดยไม่ส่งภาพ</p>
+</div>
+</div>
+<div class="card">
+<h3>สำรองประวัติ</h3>
+<button class="btn" onclick="exportData()">📤 ส่งออกประวัติ JSON</button><button class="btn light" onclick="exportProjects()">📤 ส่งออกโครงการ JSON</button>
+<button class="btn red" onclick="clearAll()">🗑️ ลบประวัติทั้งหมด</button>
+</div>
+</section>
+</main>
+
+<nav>
+<button data-page="home" class="active" onclick="go('home')"><span>🏠</span>หน้าหลัก</button>
+<button data-page="scan" onclick="go('scan')"><span>📷</span>ตรวจสอบ</button>
+<button data-page="mapPage" onclick="go('mapPage')"><span>🗺️</span>แผนที่</button>
+<button data-page="history" onclick="go('history')"><span>🕒</span>ประวัติ</button>
+<button data-page="settings" onclick="go('settings')"><span>⚙️</span>ตั้งค่า</button>
+</nav>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="js/core.js"></script>
+<script src="js/projects.js"></script>
+<script src="js/firebase.js"></script>
+<script src="js/v5-data.js"></script>
+<script src="js/v5-ai.js"></script>
+<script src="js/bootstrap.js"></script>
+</body>
+</html>
