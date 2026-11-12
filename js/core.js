@@ -191,6 +191,8 @@ function loadPhoto(file){
    $("photoStatus").textContent="เลือกภาพแล้ว: "+file.name;
    result=null;
    $("result").style.display="none";
+   if($("v5SavedActions"))$("v5SavedActions").style.display="none";
+   $("saveBtn").disabled=false;
   };
   img.src=reader.result;
  };
@@ -390,6 +392,7 @@ async function saveResult(){
  }
 
  const button=$("saveBtn");
+ if(button.disabled)return;
  button.disabled=true;
  message("saveStatus","กำลังบันทึกและตรวจสอบข้อมูล...");
 
@@ -413,8 +416,12 @@ async function saveResult(){
   await writeRecord(record);
   window.V5.afterInspection(record);
   message("saveStatus","✅ บันทึกและตรวจสอบข้อมูลสำเร็จ","good");
-  alert("✅ บันทึกสำเร็จแล้ว เปิดหน้าประวัติเพื่อดูข้อมูล");
-  go("history");
+  const actions=$("v5SavedActions");
+  if(actions){
+   $("v5SavedSummary").textContent="เสา "+record.pole+" · ลูกถ้วย "+record.insulatorId+" · บันทึกเรียบร้อย";
+   actions.style.display="block";
+  }
+  $("saveBtn").disabled=true;
  }catch(error){
   message(
    "saveStatus",
@@ -423,7 +430,8 @@ async function saveResult(){
    "bad"
   );
  }finally{
-  button.disabled=false;
+  // Stay disabled after a successful save to prevent duplicate records.
+  if($("v5SavedActions")?.style.display!=="block")button.disabled=false;
  }
 }
 
@@ -440,7 +448,9 @@ function showHistory(){
  if(insSelect){
   const current=insSelect.value;
   const project=$("historyProject").value,status=$("historyStatus").value;
-  const eligible=records.filter(r=>(project==='all'||(r.projectId||'legacy')===project)&&
+  const includeLegacy=$("includeLegacyHistory")?.checked===true;
+  const eligible=records.filter(r=>(includeLegacy||(r.projectId&&r.projectId!=='legacy'))&&
+    (project==='all'||(r.projectId||'legacy')===project)&&
     (status==='all'||(r.status||'inspected')===status));
   const ids=[...new Set(eligible.map(r=>r.insulatorId).filter(Boolean))].sort((a,b)=>
     String(a).localeCompare(String(b),'th',{numeric:true}));

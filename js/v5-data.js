@@ -18,10 +18,11 @@
  function persist(){localStorage.setItem(KEY,JSON.stringify(poles));}
  function load(){try{let a=JSON.parse(localStorage.getItem(KEY)||'[]');poles=Array.isArray(a)?a:[]}catch(e){poles=[]}}
  function projectPoleList(pid){
-  const ps=poles.filter(p=>p.projectId===pid);
+  if(window.isLegacyProjectLike?.(pid))return [];
+  const ps=poles.filter(p=>p.projectId===pid&&!window.isLegacyProjectLike?.(p.projectId));
   const ids=new Set(ps.map(p=>key(p.projectId,p.pole)));
   for(const r of records.filter(r=>(r.projectId||'legacy')===pid)){
-   if(ids.has(key(pid,r.pole)))continue;
+   if(window.isLegacyProjectLike?.(r.projectId||'legacy')||ids.has(key(pid,r.pole)))continue;
    const inferred=Math.max(Number(r.units)||0,...getRecords(pid,r.pole).map(x=>Number(x.units)||0),1);
    ps.push({projectId:pid,pole:r.pole,units:Math.min(500,inferred),legacy:true});ids.add(key(pid,r.pole));
   }
@@ -92,7 +93,7 @@
   const result=[];const visited=new Set();
   for(const r of records.slice().sort((a,b)=>new Date(b.date)-new Date(a.date))){
    const pid=r.projectId||'legacy',k=key(pid,r.pole);
-   if((chosen!=='all'&&chosen!==pid)||visited.has(k))continue;
+   if(window.isLegacyProjectLike?.(pid)||((chosen!=='all'&&chosen!==pid))||visited.has(k))continue;
    visited.add(k);
    const items=getRecords(pid,r.pole),latestByIns=new Map();
    for(const x of items.sort((a,b)=>new Date(b.date)-new Date(a.date))){if(!latestByIns.has(x.insulatorId||'legacy'))latestByIns.set(x.insulatorId||'legacy',x);}
@@ -103,7 +104,7 @@
    result.push({...r,gps:coordinate,damage:worst});
   }
   // Also show poles with coordinates that have not been inspected yet (neutral marker).
-  for(const p of poles){if((chosen!=='all'&&chosen!==p.projectId)||visited.has(key(p.projectId,p.pole)))continue;
+  for(const p of poles){if(window.isLegacyProjectLike?.(p.projectId)||((chosen!=='all'&&chosen!==p.projectId))||visited.has(key(p.projectId,p.pole)))continue;
    if(p.gps)result.push({pole:p.pole,projectId:p.projectId,gps:p.gps,damage:null,inspector:'ยังไม่ตรวจ',dirt:'–',status:'inspected'});
   }
   return result;
@@ -146,6 +147,34 @@
   if(insulatorId)el('insulatorSelect').value=insulatorId;
   go('scan');
  }
+ // Clear only the unsaved inspection draft; never delete inspection records.
+ function resetInspectionDraft(showNotice=false){
+  originalImage=null;result=null;
+  for(const id of ['cameraInput','galleryInput'])el(id).value='';
+  const canvas=el('canvas');
+  if(canvas.getContext('2d'))canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);
+  canvas.width=0;canvas.height=0;canvas.style.display='none';
+  el('photoStatus').textContent='ยังไม่ได้เลือกภาพ';
+  el('result').style.display='none';el('resultDetails').replaceChildren();
+  el('saveStatus').replaceChildren();el('saveBtn').disabled=false;
+  el('v5SavedActions').style.display='none';
+  if(showNotice)el('photoStatus').textContent='ล้างภาพและผลการตรวจที่ยังไม่บันทึกแล้ว';
+ }
+ function nextInsulator(){
+  const select=el('insulatorSelect'),current=select.selectedIndex;
+  const next=[...select.options].slice(current+1).find(o=>o.value);
+  if(!next){alert('ลูกถ้วยบนเสานี้ครบแล้ว สามารถเลือกตรวจเสาต้นถัดไปได้');return;}
+  resetInspectionDraft();select.value=next.value;
+  go('scan');
+ }
+ function nextPole(){
+  resetInspectionDraft();
+  el('pole').value='';el('units').value='';el('remarks').value='';
+  el('workStatus').value='inspected';
+  clearGPS();refreshExisting();updateInsulatorOptions();
+  go('scan');
+  el('pole').focus();
+ }
  function projectStats(pid){const list=projectPoleList(pid);const inspected=list.filter(p=>getRecords(pid,p.pole).length>0).length;return {total:list.length,inspected};}
  function cloudPoleItems(){return poles.map(p=>({col:'poles',id:encodeURIComponent(key(p.projectId,p.pole)),data:p}));}
  function importCloudPoles(incoming){
@@ -153,12 +182,14 @@
    if(!lookup(p.projectId,p.pole)){poles.push(p);n++;}}
   if(n){persist();refreshExisting();renderPoleList();}return n;
  }
- function init(){load();refreshExisting();updateInsulatorOptions();renderPoleList();bindEvents();}
+ function init(){load();refreshExisting();updateInsulatorOptions();renderPoleList();bindEvents();
+  el('insulatorSelect').addEventListener('change',()=>{if(el('v5SavedActions').style.display==='block')resetInspectionDraft();});
+ }
  function bindEvents(){
   const oldChoose=chooseProject;chooseProject=function(id){const changed=activeProjectId!==id;oldChoose(id);if(changed){el('pole').value='';el('units').value='';clearGPS();}refreshExisting();updateInsulatorOptions();renderPoleList();};
   const oldGo=go;go=function(id){oldGo(id);if(id==='scan'){refreshExisting();updateInsulatorOptions();}if(id==='projectsPage')renderPoleList();};
   const oldCreate=createProject;createProject=function(){oldCreate();refreshExisting();renderPoleList();};
   const oldDownload=cloudDownload;cloudDownload=async function(){await oldDownload();refreshExisting();renderPoleList();};
  }
- window.V5={init,afterInspection,mapSummaries,savePole,onPoleInput,chooseExistingPole,updateInsulatorOptions,openPole,renderPoleList,cloudPoleItems,importCloudPoles,projectStats};
+ window.V5={init,resetInspectionDraft,nextInsulator,nextPole,afterInspection,mapSummaries,savePole,onPoleInput,chooseExistingPole,updateInsulatorOptions,openPole,renderPoleList,cloudPoleItems,importCloudPoles,projectStats};
 })();

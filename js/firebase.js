@@ -100,7 +100,7 @@ async function cloudDownload(){
   if(storageMode==='none')throw Error('เบราว์เซอร์ไม่รองรับการจัดเก็บในเครื่อง');
   const base=cloudBase();cloudNotice('กำลังดึงรายการจาก Cloud...');
   const [pSnap,rSnap,polesSnap]=await Promise.all([base.collection('projects').get(),base.collection('inspections').get(),base.collection('poles').get()]);
-  const incomingProjects=pSnap.docs.map(d=>d.data()).filter(p=>p.id&&p.name&&p.office);
+  const incomingProjects=pSnap.docs.map(d=>d.data()).filter(p=>p.id&&p.id!=='legacy'&&p.name&&p.office);
   const newPs=incomingProjects.filter(p=>!projects.some(local=>local.id===p.id));
   const imported=rSnap.docs.map(d=>d.data()).filter(r=>r.id&&r.pole&&r.date);
   const newRs=imported.filter(r=>!records.some(local=>local.id===r.id));

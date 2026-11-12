@@ -1,14 +1,28 @@
 const PROJECTS_KEY='INSULATOR_SURVEY_PROJECTS_V1',ACTIVE_KEY='INSULATOR_SURVEY_ACTIVE_V1';
-let projects=[],activeProjectId='legacy';
+let projects=[],activeProjectId='';
+function isLegacyProjectLike(projectOrId){
+ const p=typeof projectOrId==='string' ? (projects.find(x=>x.id===projectOrId)||{id:projectOrId}) : (projectOrId||{});
+ const id=String(p.id||'').trim();
+ const name=String(p.name||'').trim();
+ const office=String(p.office||'').trim();
+ const prefix=String(p.prefix||'').trim().toUpperCase();
+ return !id || id==='legacy' || /ข้อมูลเดิม/.test(name) || /^งานตรวจสอบทั่วไป/.test(name) || prefix==='LP-' || (!office && /ข้อมูลเดิม/.test(name));
+}
 function readProjects(){
  try{const v=JSON.parse(localStorage.getItem(PROJECTS_KEY)||'[]');projects=Array.isArray(v)?v:[]}catch(e){projects=[]}
- if(!projects.some(p=>p.id==='legacy'))projects.unshift({id:'legacy',name:'งานตรวจสอบทั่วไป (ข้อมูลเดิม)',office:'ยังไม่ระบุ',prefix:'LP-',description:'ข้อมูลก่อนเพิ่มระบบโครงการ'});
- try{activeProjectId=localStorage.getItem(ACTIVE_KEY)||'legacy'}catch(e){}
- if(!projects.some(p=>p.id===activeProjectId))activeProjectId='legacy';
+ // Keep legacy inspections intact in history, but never show legacy/demo project entries in project UIs.
+ projects=projects.filter(p=>p&&!isLegacyProjectLike(p));
+ try{activeProjectId=localStorage.getItem(ACTIVE_KEY)||''}catch(e){}
+ if(!projects.some(p=>p.id===activeProjectId))activeProjectId=projects[0]?.id||'';
  try{storeProjects()}catch(e){console.warn('Unable to persist projects',e)}
 }
 function storeProjects(){localStorage.setItem(PROJECTS_KEY,JSON.stringify(projects));localStorage.setItem(ACTIVE_KEY,activeProjectId)}
-function projectName(id){return (projects.find(p=>p.id===(id||'legacy'))||{}).name||'ไม่พบโครงการ'}
+function projectName(id){
+ if(!id||id==='legacy')return 'ไม่ระบุโครงการ';
+ const p=projects.find(p=>p.id===id);
+ return p&&!isLegacyProjectLike(p)?p.name:'ไม่ระบุโครงการ';
+}
+window.isLegacyProjectLike=isLegacyProjectLike;
 function statusName(status){return ({inspected:'ตรวจแล้ว / รอยืนยัน',followup:'ต้องตรวจซ้ำ',completed:'ยืนยันผลแล้ว'})[status]||'ตรวจแล้ว / รอยืนยัน'}
 function createProject(){
  const name=$('pName').value.trim(),office=$('pOffice').value.trim(),prefix=$('pPrefix').value.trim()||'P-';
@@ -22,17 +36,17 @@ function createProject(){
  syncSelectors();renderProjects();refreshDashboard();alert('สร้างโครงการและเลือกใช้งานสำเร็จ');
 }
 function chooseProject(id){
- if(!projects.some(p=>p.id===id))return;
+ if(isLegacyProjectLike(id)||!projects.some(p=>p.id===id))return;
  const old=activeProjectId;activeProjectId=id;
  try{storeProjects()}catch(e){activeProjectId=old;alert('เปลี่ยนโครงการไม่ได้');return}
  syncSelectors();renderProjects();refreshDashboard();
 }
 function removeProject(id){
- if(id==='legacy'){alert('ไม่สามารถลบโครงการข้อมูลเดิม');return}
+ if(isLegacyProjectLike(id)){alert('ไม่สามารถลบโครงการข้อมูลเดิม');return}
  if(records.some(r=>r.projectId===id)){alert('โครงการมีประวัติการตรวจอยู่ ไม่อนุญาตให้ลบเพื่อป้องกันข้อมูลสูญหาย');return}
  if(!confirm('ต้องการลบโครงการนี้หรือไม่?'))return;
  const before=projects.slice(),old=activeProjectId;
- projects=projects.filter(p=>p.id!==id);if(activeProjectId===id)activeProjectId='legacy';
+ projects=projects.filter(p=>p.id!==id);if(activeProjectId===id)activeProjectId=projects[0]?.id||'';
  try{storeProjects()}catch(e){projects=before;activeProjectId=old;alert('ลบไม่สำเร็จ');return}
  syncSelectors();renderProjects();refreshDashboard();
 }
@@ -53,13 +67,14 @@ function syncSelectors(){
  for(const id of ['scanProject','mapProject','historyProject']){
   const select=$(id),current=select.value;select.replaceChildren();
   if(id!=='scanProject')select.add(new Option('ทุกโครงการ','all'));
+  else if(!projects.length)select.add(new Option('กรุณาสร้างโครงการสำรวจก่อน',''));
   for(const p of projects)select.add(new Option(p.office+' — '+p.name,p.id));
   select.value=id==='scanProject'?activeProjectId:([...select.options].some(o=>o.value===current)?current:'all');
  }
 }
 function refreshDashboard(){
  const p=projects.find(p=>p.id===activeProjectId);
- $('activeProjectLabel').textContent=p?p.name+' · '+p.office:'ไม่พบโครงการ';
+ $('activeProjectLabel').textContent=p&&!isLegacyProjectLike(p)?p.name+' · '+p.office:'ยังไม่ได้เลือกโครงการ';
  const list=records.filter(r=>(r.projectId||'legacy')===activeProjectId);
  $('poleTotal').textContent=new Set(list.map(r=>String(r.pole).toLowerCase())).size;
  $('inspectionTotal').textContent=list.length;
@@ -68,11 +83,13 @@ function refreshDashboard(){
 function filteredRecords(){
  const q=$('search').value.trim().toLowerCase(),p=$('historyProject').value,status=$('historyStatus').value;
  const insulator=$('historyInsulator')?.value||'all';
+ const includeLegacy=$('includeLegacyHistory')?.checked===true;
  // A pair of coordinates searches a ~15 m radius. Single values can match either coordinate.
  const pair=q.match(/^(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)$/);
  const pairLat=pair?Number(pair[1]):null,pairLng=pair?Number(pair[2]):null;
  const validPair=!!pair && isValidCoordinate(pairLat,pairLng);
  return records.filter(r=>{
+  if(!includeLegacy&&(!r.projectId||r.projectId==='legacy'))return false;
   if((p!=='all'&&(r.projectId||'legacy')!==p)||(status!=='all'&&(r.status||'inspected')!==status))return false;
   if(insulator!=='all'&&(insulator==='__unassigned__'?!!r.insulatorId:String(r.insulatorId||'')!==insulator))return false;
   if(!q)return true;
