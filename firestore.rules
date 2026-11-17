@@ -27,11 +27,24 @@ service cloud.firestore {
       return member(pid) && sharedProject(pid).members[request.auth.uid] in ['owner', 'editor'];
     }
 
-    // Preserve legacy per-user backup collections from Insulator AI V4/V5.
-    match /users/{uid} {
-      allow read, write: if signedIn() && request.auth.uid == uid;
-      match /{nested=**} {
-        allow read, write: if signedIn() && request.auth.uid == uid;
+    // Existing private V5 user rules, preserved exactly.
+    match /users/{userId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == userId;
+
+      match /projects/{projectId} {
+        allow read, write: if request.auth != null
+          && request.auth.uid == userId;
+      }
+
+      match /poles/{poleId} {
+        allow read, write: if request.auth != null
+          && request.auth.uid == userId;
+      }
+
+      match /inspections/{inspectionId} {
+        allow read, write: if request.auth != null
+          && request.auth.uid == userId;
       }
     }
 
