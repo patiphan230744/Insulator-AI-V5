@@ -56,7 +56,7 @@ function renderProjectOptions(){
  for(const p of projects.filter(p=>p.id&&!window.isLegacyProjectLike?.(p)))local.add(new Option(p.name+" · "+p.office,p.id));
  if([...local.options].some(x=>x.value===current))local.value=current;
 }
-function renderProjects(){
+function renderSharedProjects(){
  if(!list)return;list.replaceChildren();
  if(!state.approved)return;
  const all=[...state.projects.values()].sort((a,b)=>esc(a.name).localeCompare(esc(b.name),"th"));
@@ -166,7 +166,7 @@ function listenProjects(){
   if(state.uid!==uid)return;
   state.projects=new Map(snapshot.docs.map(d=>[d.id,{...d.data(),id:d.id}]));
   if(state.selected&&!state.projects.has(state.selected))stopProject();
-  renderProjects();
+  renderSharedProjects();
   if(state.selected){state.canWrite=mayWrite(selectedProject());renderDetails();}
   show("✅ เชื่อมต่อโครงการส่วนรวมแล้ว ("+state.projects.size+" โครงการ)"+(snapshot.metadata.fromCache?" · ข้อมูลจากแคช":""));
  },sharedError);
@@ -181,7 +181,7 @@ function onAuth(u){
   if(generation!==state.authGeneration)return;
   if(!doc.exists||doc.data().active!==true){
    if(state.approved){state.approved=false;document.documentElement.classList.remove("v5-staff-approved");
-    if(state.projectsOff)state.projectsOff();state.projectsOff=null;stopProject();state.projects.clear();renderProjects();}
+    if(state.projectsOff)state.projectsOff();state.projectsOff=null;stopProject();state.projects.clear();renderSharedProjects();}
    show("บัญชีนี้ยังไม่ได้รับอนุมัติเป็นเจ้าหน้าที่ กรุณาติดต่อผู้ดูแล Firebase พร้อม UID ด้านล่าง");
    return;
   }
@@ -270,7 +270,7 @@ function enableLocalProject(){
  if(!confirm("เพิ่มชื่อโครงการลงในเครื่องนี้เพื่อใช้หน้าตรวจสอบ? ข้อมูลใหม่จะเก็บในเครื่องด้วย เหมาะกับอุปกรณ์ส่วนตัวของเจ้าหน้าที่เท่านั้น"))return;
  try{
   const local={id:p.id,name:p.name,office:p.office,prefix:p.prefix||"P-",description:p.description||"",createdAt:p.createdAt||new Date().toISOString()};
-  projects.push(local);activeProjectId=p.id;storeProjects();syncSelectors();renderProjects();refreshDashboard();
+  projects.push(local);activeProjectId=p.id;storeProjects();syncSelectors();renderProjects();renderSharedProjects();refreshDashboard();
   window.V5?.renderPoleList();show("✅ เพิ่มโครงการในเครื่องแล้ว สามารถตรวจลูกถ้วยและซิงก์ขึ้นโครงการส่วนรวมได้");
  }catch(e){sharedError(e);}
 }
