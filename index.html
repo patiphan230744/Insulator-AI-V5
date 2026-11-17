@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="css/base.css">
 <link rel="stylesheet" href="css/v5.css">
 <link rel="stylesheet" href="css/v5-enhancements.css?v=20261117">
+<link rel="stylesheet" href="css/v5-shared.css?v=20261117">
 </head>
 <body>
 
@@ -126,8 +127,8 @@
 <div id="historyList">กำลังโหลดประวัติ</div>
 </div>
 <div class="card">
-<h3>ประวัติส่วนรวม (กำลังพัฒนา)</h3>
-<p class="note">ขณะนี้ยังแสดงข้อมูลที่เก็บในเครื่องเท่านั้น การแชร์โครงการระหว่างบัญชี Firebase ยังไม่ได้เปิดใช้</p>
+<h3>ประวัติส่วนรวม (Firebase)</h3>
+<p class="note">เข้าดูโครงการและประวัติที่แชร์กับเจ้าหน้าที่ได้ในเมนู ตั้งค่า → โครงการส่วนรวม (ต้องได้รับอนุมัติสิทธิ์ก่อน)</p>
 </div>
 </section>
 
@@ -175,7 +176,21 @@
 <button class="btn" onclick="cloudUpload()">☁️ ส่งสำเนาข้อมูลในเครื่องขึ้น Cloud</button>
 <button class="btn light" onclick="cloudDownload()">⬇️ ดึงข้อมูล Cloud มาเพิ่มในเครื่อง</button>
 <button class="btn light" onclick="cloudSignOut()">ออกจากระบบ</button>
-<p class="note">การซิงก์เป็นแบบกดเอง ไม่ลบข้อมูลเก่าในเครื่อง และยังไม่แชร์ระหว่างผู้ใช้ รูปภาพขนาดใหญ่ยังเก็บในเครื่องเท่านั้น; Cloud จะเก็บข้อมูลสำรวจ พิกัด โครงการ และผล AI จำลอง โดยไม่ส่งภาพ</p>
+<div id="v5SharedPanel" class="v5-shared">
+<h3>👥 โครงการส่วนรวม (Firebase)</h3>
+<p class="note">สำหรับเจ้าหน้าที่ที่ได้รับอนุมัติเท่านั้น · โครงการและประวัติในเครื่องเดิมจะไม่ถูกเผยแพร่อัตโนมัติ</p>
+<p id="v5SharedStatus" class="msg info" role="status">กำลังตรวจสอบสิทธิ์เจ้าหน้าที่...</p>
+<p class="note">UID สำหรับให้เจ้าของโครงการเพิ่มสมาชิก: <code id="v5OwnUid"></code></p>
+<div class="v5-shared-create">
+<label for="v5ShareLocalProject">สร้างโครงการส่วนรวมจากโครงการที่อยู่ในเครื่อง</label>
+<select id="v5ShareLocalProject"></select>
+<button class="btn light" id="v5ShareCreate" type="button">สร้างโครงการส่วนรวม (ยังไม่ส่งประวัติ)</button>
+</div>
+<h4>โครงการส่วนรวมที่ได้รับสิทธิ์</h4>
+<div id="v5SharedProjects"></div>
+<div id="v5SharedDetails"></div>
+</div>
+<p class="note">การสำรองข้อมูลส่วนตัวเดิมด้านบนยังซิงก์ด้วยตนเองภายใต้ users/{uid} และไม่แชร์ข้ามบัญชี · ระบบส่วนรวมด้านล่างแยกสิทธิ์ตามโครงการและไม่ส่งรูปภาพ</p>
 </div>
 </div>
 <div class="card">
@@ -205,5 +220,6 @@
 <script src="js/v5-ai.js"></script>
 <script src="js/bootstrap.js"></script>
 <script src="js/v5-enhancements.js?v=20261117"></script>
+<script src="js/v5-shared.js?v=20261117"></script>
 </body>
 </html>
