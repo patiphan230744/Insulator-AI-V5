@@ -1,0 +1,30 @@
+/* Live collaborative Firebase panel — feature branch, gated until rules are deployed. */
+html:not(.v5-staff-approved) #home>.stats,
+html:not(.v5-staff-approved) #home>.grid,
+html:not(.v5-staff-approved) #home>.card:not(:first-of-type) {
+  display:none !important;
+}
+html:not(.v5-staff-approved) section.page:not(#home):not(#settings) {
+  display:none !important;
+}
+.v5-shared {margin:18px 0 4px;padding:15px;border:1px solid #c9daef;background:#f8fbff;border-radius:14px;}
+.v5-shared h3{margin-top:0}
+.v5-shared code {font-size:12px;overflow-wrap:anywhere}
+.v5-shared select,.v5-shared input {max-width:100%;box-sizing:border-box}
+.v5-shared-create {margin:14px 0;padding:12px;border:1px solid #e1eafb;border-radius:10px;background:#fff}
+.v5-shared-row,.v5-shared-member,.v5-shared-pole {
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:12px 0;border-bottom:1px solid #dae5f4;flex-wrap:wrap;
+}
+.v5-shared-row>div,.v5-shared-pole {min-width:0;flex:1}
+.v5-shared-row small,.v5-shared-pole small{display:block;color:#576b86;font-size:12px;margin:4px 0;line-height:1.5}
+.v5-shared-row button,.v5-shared-member button,.v5-shared-actions button {width:auto;margin:0;font-size:13px;}
+.v5-shared-stat{font-size:14px}
+.v5-shared-actions{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}
+.v5-shared-pole{display:block;background:#fff;border:1px solid #e1eafa;border-radius:12px;margin:10px 0;padding:12px}
+.v5-shared-pole summary{cursor:pointer;color:#104aa2;font-weight:600;padding:7px 0}
+.v5-shared-record{font-size:12px;color:#475569;border-top:1px solid #e8effa;padding:6px 0;margin:0}
+.v5-shared-members{margin-top:18px;border-top:1px solid #d5e2f4;padding-top:8px}
+.v5-shared-member{font-size:13px}
+.v5-shared-member code {font-size:11px;max-width:70%}
+@media(max-width:480px){.v5-shared{padding:11px}.v5-shared-actions .btn{width:100%}}
