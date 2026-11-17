@@ -1,223 +1,315 @@
-/* Insulator AI V5: optional UI extension; does not alter stored data. */
-(function(){
-'use strict';
-const $=id=>document.getElementById(id);
-const norm=x=>String(x??'').trim().toLocaleLowerCase('th');
-const state={watch:null,gen:0,follow:true,manual:false,last:null,target:null,boundMap:null};
-const valid=(a,b)=>Number.isFinite(+a)&&Number.isFinite(+b)&&+a>=-90&&+a<=90&&+b>=-180&&+b<=180;
-const visible=()=>!!$('mapPage')?.classList.contains('active');
-const status=s=>{if($('myMapLocationStatus'))$('myMapLocationStatus').textContent=s;};
-function poles(){
- let saved=[];try{saved=JSON.parse(localStorage.getItem('INSULATOR_V5_POLES_V1')||'[]');}catch(e){}
- if(!Array.isArray(saved))saved=[];
- const items=new Map();
- const ensure=(pid,pole)=>{
-  if(!projects.some(p=>p.id===pid)||!norm(pole))return null;
-  const key=pid+'::'+norm(pole);
-  if(!items.has(key))items.set(key,{pid,pole:String(pole).trim(),units:1,gps:null,records:[]});
-  return items.get(key);
- };
- for(const p of saved){const x=ensure(p.projectId,p.pole);if(!x)continue;
-  const n=+p.units;if(Number.isInteger(n)&&n>=1&&n<=500)x.units=n;
-  if(p.gps&&valid(p.gps.lat,p.gps.lng))x.gps=p.gps;
- }
- for(const r of records){const x=ensure(r.projectId,r.pole);if(!x)continue;x.records.push(r);
-  const n=+r.units;if(!saved.some(p=>p.projectId===x.pid&&norm(p.pole)===norm(x.pole))&&Number.isInteger(n)&&n>=1&&n<=500)x.units=Math.max(x.units,n);
-  if(!x.gps&&r.gps&&valid(r.gps.lat,r.gps.lng))x.gps=r.gps;
- }
- return [...items.values()];
-}
-function summary(x){
- const latest=new Map();
- for(const r of x.records.slice().sort((a,b)=>new Date(b.date)-new Date(a.date))){
-  const key=norm(r.insulatorId);
-  if(key&&!latest.has(key))latest.set(key,r);
- }
- let done=0,worst=null;
- for(let i=1;i<=x.units;i++){
-  const r=latest.get(norm(x.pole+'-I'+String(i).padStart(2,'0')));
-  if(!r)continue;
-  done++;
-  if(Number.isFinite(+r.damage))worst=Math.max(worst??0,+r.damage);
- }
- let label=done===0?'ยังไม่ตรวจ':done<x.units?'ยังตรวจไม่ครบ':'ปกติ';
- let color='#64748b';
- if(done===x.units)color='#15803d';
- if(done>0&&done<x.units)color='#a16207';
- if(worst>=4){label='พบความเสียหาย'+(done<x.units?' · ยังไม่ครบ':'');color='#dc2626';}
- else if(worst>=2){label='เริ่มเสื่อม'+(done<x.units?' · ยังไม่ครบ':'');color='#b45309';}
- return {done,total:x.units,worst,label,color,history:x.records.length};
-}
-function refreshList(){
- const root=$('v5PoleList');if(!root)return;
- const items=poles().filter(p=>p.pid===activeProjectId);
- for(const row of root.querySelectorAll('.pole-row')){
-  const name=norm(row.querySelector('b')?.textContent),x=items.find(p=>norm(p.pole)===name);
-  if(!x)continue;
-  const s=summary(x),small=row.querySelector('small'),badge=row.querySelector('.pole-state');
-  if(small)small.textContent='ลูกถ้วย '+s.total+' ลูก · ตรวจแล้ว '+s.done+'/'+s.total+' · ประวัติ '+s.history+' ครั้ง';
-  if(badge){badge.textContent='● '+s.label;badge.style.color=s.color;}
- }
-}
-function refreshDetail(){
- const root=$('v5PoleDetail'),head=root?.querySelector('.pole-detail-head');
- if(!head||root.querySelector('.v5-progress'))return;
- const name=norm(head.querySelector('h2')?.textContent);
- const project=projects.find(p=>norm(p.name)===norm(head.querySelector('.mini-label')?.textContent));
- const x=poles().find(p=>p.pid===(project?.id||activeProjectId)&&norm(p.pole)===name);if(!x)return;
- const s=summary(x),div=document.createElement('div');div.className='v5-progress';
- const h=document.createElement('strong');h.textContent='สรุปเสา '+x.pole+' — '+s.label;h.style.color=s.color;
- const p=document.createElement('p');p.textContent='ตรวจแล้ว '+s.done+'/'+s.total+' ลูก · ยังไม่ตรวจ '+(s.total-s.done)+' ลูก · ประวัติ '+s.history+' ครั้ง';
- const track=document.createElement('div');track.className='v5-progress-track';
- const fill=document.createElement('div');fill.style.width=(100*s.done/s.total)+'%';track.append(fill);
- div.append(h,p,track);
- if(s.worst!==null){const w=document.createElement('p');w.textContent='ระดับความเสียหายสูงสุดจากผลล่าสุด: '+s.worst+'/5';div.append(w);}
- head.after(div);
-}
-if($('v5PoleList'))new MutationObserver(refreshList).observe($('v5PoleList'),{childList:true});
-if($('v5PoleDetail'))new MutationObserver(refreshDetail).observe($('v5PoleDetail'),{childList:true});
-function updateButton(){
- const b=$('v5GPSControl');if(b){b.textContent=state.watch===null?'▶ เริ่มติดตาม GPS':'⏸ หยุดติดตาม GPS';b.setAttribute('aria-pressed',state.watch===null?'false':'true');}
-}
-function stop(manual=false){
- ++state.gen;
- if(state.watch!==null){navigator.geolocation?.clearWatch(state.watch);state.watch=null;}
- state.manual=manual;updateButton();
- if(manual)status('หยุดติดตาม GPS แล้ว');
-}
-function bindMap(){
- if(map&&map!==state.boundMap){
-  map.on('dragstart',()=>{state.follow=false;});
-  state.boundMap=map;
- }
-}
-function position(p,g){
- if(g!==state.gen||!visible())return;
- const {latitude:lat,longitude:lng,accuracy}=p.coords;
- if(!valid(lat,lng))return status('พิกัด GPS ไม่ถูกต้อง');
- if(Date.now()-(p.timestamp||Date.now())>60000)return status('ข้อมูล GPS เก่าเกิน 1 นาที');
- const point=[lat,lng];state.last={lat,lng,when:Date.now()};
- if(!map)loadMap();
- if(!map||typeof L==='undefined')return;
- bindMap();
- if(!myLocationMarker)myLocationMarker=L.circleMarker(point,{radius:9,color:'#fff',weight:3,fillColor:'#2563eb',fillOpacity:1}).addTo(map).bindPopup('ตำแหน่งของฉัน');
- else myLocationMarker.setLatLng(point);
- if(Number.isFinite(accuracy)&&accuracy>=0){
-  if(!myAccuracyCircle)myAccuracyCircle=L.circle(point,{radius:accuracy,color:'#2563eb',fillColor:'#60a5fa',fillOpacity:.1,weight:1,interactive:false}).addTo(map);
-  else myAccuracyCircle.setLatLng(point).setRadius(accuracy);
- }
- myLocationMarker.bringToFront();
- if(state.follow)map.setView(point,Math.max(map.getZoom(),16),{animate:true});
- status('🔵 GPS สด: '+lat.toFixed(6)+', '+lng.toFixed(6)+(Number.isFinite(accuracy)?' · คลาดเคลื่อนประมาณ '+Math.round(accuracy)+' ม.':'')+(state.follow?' · กล้องติดตาม':' · เลื่อนแผนที่อิสระ'));
-}
-function start(){
- if(!visible()||document.hidden||state.watch!==null)return;
- if(!navigator.geolocation||!window.isSecureContext)return status('ต้องอนุญาต GPS และเปิดผ่าน HTTPS');
- state.manual=false;
- const g=++state.gen;
- status('กำลังติดตาม GPS... กรุณาอนุญาตตำแหน่ง');
- try{
-  state.watch=navigator.geolocation.watchPosition(p=>position(p,g),e=>{
-   if(g!==state.gen)return;
-   if(e.code===1){stop(true);status('GPS ไม่ได้รับอนุญาต กรุณาเปิดสิทธิ์ตำแหน่ง');}
-   else status('ไม่สามารถรับพิกัด GPS: '+(e.code===2?'ไม่มีสัญญาณ':e.code===3?'หมดเวลา':e.message));
-  },{enableHighAccuracy:true,maximumAge:5000,timeout:20000});
-  updateButton();
- }catch(e){stop(true);status('ไม่สามารถเริ่ม GPS: '+e.message);}
-}
-window.locateMeOnMap=function(center=true){
- state.target=null;if(center)state.follow=true;
- if(state.watch===null)start();
- if(center&&state.last&&Date.now()-state.last.when<60000&&map)map.setView([state.last.lat,state.last.lng],Math.max(16,map.getZoom()));
-};
-const oldGo=window.go;
-window.go=function(id){
- if(id!=='mapPage'){stop();state.target=null;}
- else {state.follow=!state.target;state.manual=false;}
- oldGo(id);
- if(id==='mapPage')setTimeout(()=>{if(visible()) {bindMap();start();}},300);
-};
-const locateBtn=[...$('mapPage').querySelectorAll('button')].find(b=>b.getAttribute('onclick')?.includes('locateMeOnMap'));
-if(locateBtn){
- const b=document.createElement('button');b.id='v5GPSControl';b.type='button';b.className='btn light';
- b.addEventListener('click',()=>{if(state.watch===null){state.follow=true;state.target=null;start();}else stop(true);});
- locateBtn.after(b);updateButton();
-}
-document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();else if(visible()&&!state.manual)start();});
-window.addEventListener('pagehide',()=>stop());
-function distance(a,b,c,d){
- const rad=x=>x*Math.PI/180,da=rad(a-c),db=rad(b-d);
- const h=Math.sin(da/2)**2+Math.cos(rad(c))*Math.cos(rad(a))*Math.sin(db/2)**2;
- return 12742000*Math.asin(Math.min(1,Math.sqrt(h)));
-}
-const card=document.createElement('div');card.className='card v5-smart';
-const label=document.createElement('label');label.htmlFor='v5SmartInput';label.textContent='🔎 ค้นหาอัจฉริยะ';
-const input=document.createElement('input');input.id='v5SmartInput';input.type='search';input.placeholder='ชื่อโครงการ / รหัสเสา / ลูกถ้วย / ผู้ตรวจ / พิกัด';
-const note=document.createElement('p');note.className='note';note.textContent='เลือกผลค้นหาเพื่อไปยังเสาบนแผนที่ หรือเปิดรายละเอียดเสา';
-const results=document.createElement('div');results.className='v5-search-results';results.setAttribute('aria-live','polite');
-card.append(label,input,note,results);
-const mapCard=$('map')?.closest('.card');if(mapCard)mapCard.before(card);
-function openPole(x){window.V5.openPole(x.pid,x.pole);}
-function showPole(x){
- if(!x.gps||!valid(x.gps.lat,x.gps.lng))return openPole(x);
- state.target=x;state.follow=false;
- if($('mapProject'))$('mapProject').value=x.pid;
- if(!visible())window.go('mapPage');
- setTimeout(()=>{
-  if($('mapProject'))$('mapProject').value=x.pid;
-  loadMap();state.follow=false;
-  map?.setView([+x.gps.lat,+x.gps.lng],Math.max(map.getZoom(),17));
-  const panel=$('mapDetail');if(!panel)return;
-  panel.replaceChildren();
-  const t=document.createElement('strong');t.textContent='เสา '+x.pole;
-  const p=document.createElement('p'),s=summary(x);p.textContent='ตรวจแล้ว '+s.done+'/'+s.total+' ลูก · '+s.label;
-  const b=document.createElement('button');b.className='btn';b.textContent='📋 ดูรายละเอียดเสา';b.onclick=()=>openPole(x);
-  panel.append(t,p,b);
- },450);
-}
-function render(){
- const q=norm(input.value);results.replaceChildren();if(!q)return;
- const all=poles(),pair=q.match(/^(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)$/);
- const matches=[];
- for(const p of projects){
-  if(norm(p.name).includes(q)||norm(p.office).includes(q))matches.push({score:40,project:p});
- }
- for(const x of all){
-  const project=projects.find(p=>p.id===x.pid);
-  const pole=norm(x.pole),lat=x.gps?.lat,lng=x.gps?.lng;
-  const nearby=pair&&valid(pair[1],pair[2])&&x.gps&&distance(lat,lng,+pair[1],+pair[2])<=15;
-  const hit=pole===q?110:pole.includes(q)?85:nearby?100:
-   x.records.some(r=>norm(r.insulatorId).includes(q))?70:
-   x.records.some(r=>norm(r.inspector).includes(q))?60:
-   norm(project?.name).includes(q)||norm(project?.office).includes(q)?45:
-   x.gps&&(String(lat).includes(q)||String(lng).includes(q))?35:0;
-  if(hit)matches.push({score:hit,x});
- }
- matches.sort((a,b)=>b.score-a.score);
- if(!matches.length){results.textContent='ไม่พบข้อมูลที่ตรงกับคำค้นในเครื่องนี้';return;}
- for(const m of matches.slice(0,12)){
-  const row=document.createElement('div');row.className='v5-search-row';
-  const main=document.createElement('button');main.type='button';main.className='v5-search-main';
-  if(m.project){
-   main.textContent='📁 '+m.project.name;
-   main.onclick=()=>{
-    state.target={pid:m.project.id};state.follow=false;
-    if($('mapProject'))$('mapProject').value=m.project.id;
-    if(!visible())window.go('mapPage');
-    setTimeout(()=>{if($('mapProject'))$('mapProject').value=m.project.id;loadMap();state.follow=false;},450);
-   };
-   row.append(main);
-  }else{
-   const s=summary(m.x),project=projects.find(p=>p.id===m.x.pid);
-   main.textContent='📍 '+m.x.pole+' · '+(project?.name||'')+' · '+s.done+'/'+s.total+' ลูก · '+s.label;
-   main.onclick=()=>showPole(m.x);
-   const detail=document.createElement('button');detail.type='button';detail.className='v5-search-detail';
-   detail.textContent='รายละเอียด';detail.onclick=()=>openPole(m.x);
-   row.append(main,detail);
+/* Insulator AI V5 enhancements – 2026-11-17
+ * Non-destructive UI extension: live map GPS, unified smart search,
+ * and per-pole progress summaries. Does not write to Firebase or storage.
+ * Load after js/bootstrap.js; relies on the V5 classic-script globals.
+ */
+(function () {
+  'use strict';
+  if (window.InsulatorV5Enhancements) return;
+  const byId = id => document.getElementById(id);
+  const locationState = {watchId:null, generation:0, follow:true, lastFix:null, manualPause:false, target:null, mapEventsBound:false};
+  const statusElement = () => byId('myMapLocationStatus');
+  const isMapVisible = () => byId('mapPage')?.classList.contains('active') === true;
+  const gpsAvailable = () => !!navigator.geolocation && !!window.isSecureContext;
+  const validGPS = (lat,lng) => Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+  const clean = value => String(value == null ? '' : value).trim();
+  const normal = value => clean(value).toLocaleLowerCase('th');
+  const hasProject = pid => Array.isArray(projects) && projects.some(p => p.id === pid && !window.isLegacyProjectLike?.(p));
+  const headingStatus = text => { if (statusElement()) statusElement().textContent = text; };
+
+  function bindMapDrag() {
+    if (!map || locationState.mapEventsBound) return;
+    locationState.mapEventsBound = true;
+    map.on('dragstart', () => { locationState.follow = false; });
   }
-  results.append(row);
- }
-}
-input.addEventListener('input',render);
-window.InsulatorV5Enhancements={start,stop,poles,summary,render};
+  function updateLocation(position, generation) {
+    if (generation !== locationState.generation || !isMapVisible()) return;
+    const {latitude:lat,longitude:lng,accuracy} = position.coords;
+    if (!validGPS(lat,lng)) { headingStatus('GPS ส่งพิกัดไม่ถูกต้อง'); return; }
+    const ageMs = Math.max(0, Date.now() - (position.timestamp || Date.now()));
+    if (ageMs > 60000) { headingStatus('GPS ยังไม่มีตำแหน่งใหม่ (ข้อมูลเก่าเกิน 1 นาที)'); return; }
+    locationState.lastFix = {lat,lng,accuracy,when:Date.now()};
+    if (!map && typeof loadMap === 'function') loadMap();
+    if (!map || typeof L === 'undefined') return;
+    bindMapDrag();
+    const point = [lat,lng];
+    if (!myLocationMarker) {
+      myLocationMarker = L.circleMarker(point,{radius:9,color:'#fff',weight:3,fillColor:'#2563eb',fillOpacity:1})
+        .addTo(map).bindPopup('📍 ตำแหน่งของฉัน (GPS สด)');
+    } else {
+      myLocationMarker.setLatLng(point);
+    }
+    if (Number.isFinite(accuracy) && accuracy >= 0) {
+      if (!myAccuracyCircle) {
+        myAccuracyCircle = L.circle(point,{radius:accuracy,color:'#2563eb',weight:1,fillColor:'#60a5fa',fillOpacity:0.1,interactive:false}).addTo(map);
+      } else { myAccuracyCircle.setLatLng(point).setRadius(accuracy); }
+    } else if (myAccuracyCircle) { map.removeLayer(myAccuracyCircle); myAccuracyCircle = null; }
+    myLocationMarker.bringToFront();
+    if (locationState.follow) map.setView(point,Math.max(map.getZoom(),16),{animate:true});
+    headingStatus('🔵 GPS สด: '+lat.toFixed(6)+', '+lng.toFixed(6)+
+      (Number.isFinite(accuracy)?' · ความแม่นยำประมาณ '+Math.round(accuracy)+' ม.':'')+
+      (locationState.follow?' · กล้องติดตาม':' · หมุดยังติดตาม (กล้องไม่เลื่อน)'));
+  }
+  function stopTracking(pausedByUser=false) {
+    locationState.generation++;
+    if (locationState.watchId !== null && navigator.geolocation) {
+      navigator.geolocation.clearWatch(locationState.watchId);
+    }
+    locationState.watchId = null;
+    locationState.manualPause = pausedByUser;
+    if (pausedByUser) headingStatus('หยุดติดตาม GPS แล้ว · กด “กลับไปตำแหน่งปัจจุบัน” เพื่อเริ่มใหม่');
+    renderTrackingButton();
+  }
+  function renderTrackingButton() {
+    const button=byId('v5TrackingToggle');
+    if (!button) return;
+    button.textContent = locationState.watchId === null?'▶ เริ่มติดตาม GPS':'⏸ หยุดติดตาม GPS';
+    button.setAttribute('aria-pressed',locationState.watchId !== null?'true':'false');
+  }
+  function startTracking() {
+    if (!isMapVisible() || document.hidden) return;
+    if (!gpsAvailable()) {
+      headingStatus(navigator.geolocation?'ต้องเปิดเว็บผ่าน HTTPS เพื่อใช้ GPS':'อุปกรณ์นี้ไม่รองรับ GPS');
+      return;
+    }
+    if (locationState.watchId !== null) return;
+    locationState.manualPause = false;
+    const generation=++locationState.generation;
+    headingStatus('กำลังติดตาม GPS… กรุณาอนุญาตตำแหน่งเมื่อเบราว์เซอร์ถาม');
+    try {
+      locationState.watchId = navigator.geolocation.watchPosition(
+        p => updateLocation(p,generation),
+        err => {
+          if (generation !== locationState.generation) return;
+          const reason = err.code===1?'ไม่ได้รับอนุญาตให้เข้าถึงตำแหน่ง':
+            err.code===2?'อุปกรณ์ระบุตำแหน่งไม่ได้':
+            err.code===3?'GPS ยังไม่ตอบสนอง (หมดเวลารอ)':clean(err.message);
+          headingStatus('ติดตาม GPS ไม่สำเร็จ: '+reason);
+          if (err.code===1) { stopTracking(true); headingStatus('ไม่ได้รับอนุญาต GPS · เปิดสิทธิ์ตำแหน่งแล้วจึงกดเริ่มใหม่'); }
+        },
+        {enableHighAccuracy:true,maximumAge:5000,timeout:20000}
+      );
+      renderTrackingButton();
+    } catch(err) { headingStatus('เปิด GPS ไม่สำเร็จ: '+err.message); stopTracking(true); }
+  }
+  // Override the on-demand map locator only; the inspection GPS button remains unchanged.
+  window.locateMeOnMap = function(center=true) {
+    locationState.follow = center && !locationState.target;
+    locationState.manualPause = false;
+    startTracking();
+    if (center && !locationState.target && locationState.lastFix && Date.now()-locationState.lastFix.when < 60000 && map) {
+      map.setView([locationState.lastFix.lat,locationState.lastFix.lng],Math.max(map.getZoom(),16));
+    }
+  };
+  const previousGo = window.go;
+  window.go = function(page) {
+    if (page !== 'mapPage') { stopTracking(false); locationState.target = null; }
+    else { locationState.follow = !locationState.target; locationState.manualPause = false; }
+    previousGo(page);
+    if (page === 'mapPage') setTimeout(() => { if (isMapVisible()) { bindMapDrag(); startTracking(); } },250);
+  };
+  const currentButton = [...byId('mapPage').querySelectorAll('button')].find(b => b.getAttribute('onclick')?.includes('locateMeOnMap'));
+  if (currentButton) {
+    const button=document.createElement('button');
+    button.id='v5TrackingToggle';button.type='button';button.className='btn light v5-gps-toggle';
+    button.addEventListener('click', () => {
+      if (locationState.watchId !== null) stopTracking(true);
+      else { locationState.follow=true; locationState.target=null; startTracking(); }
+    });
+    currentButton.addEventListener('click',()=>{locationState.target=null;locationState.follow=true;},true);
+    currentButton.insertAdjacentElement('afterend',button);
+    renderTrackingButton();
+  }
+  document.addEventListener('visibilitychange',()=>{
+    if (document.hidden) stopTracking(locationState.manualPause);
+    else if (isMapVisible() && !locationState.manualPause) startTracking();
+  });
+  window.addEventListener('pagehide',()=>stopTracking(false));
+
+  function storedPoles() {
+    try {
+      const value=JSON.parse(localStorage.getItem('INSULATOR_V5_POLES_V1')||'[]');
+      return Array.isArray(value)?value:[];
+    } catch (_) {return [];}
+  }
+  function snapshot() {
+    const entries=new Map(),projectEntries=[];
+    if (!Array.isArray(projects) || !Array.isArray(records)) return {entries:[],projectEntries};
+    for (const p of projects) if (hasProject(p.id)) projectEntries.push({type:'project',projectId:p.id,name:p.name,office:p.office||''});
+    function assure(pid,pole) {
+      if (!hasProject(pid) || !clean(pole)) return null;
+      const id=pid+'::'+normal(pole);
+      if (!entries.has(id)) entries.set(id,{type:'pole',projectId:pid,pole:clean(pole),units:0,gps:null,records:[]});
+      return entries.get(id);
+    }
+    for(const pole of storedPoles()) {
+      const item=assure(pole.projectId,pole.pole);
+      if (!item) continue;
+      const units=Number(pole.units);
+      if (Number.isInteger(units)&&units>=1&&units<=500) item.units=units;
+      if (pole.gps && validGPS(Number(pole.gps.lat),Number(pole.gps.lng))) item.gps=pole.gps;
+    }
+    for (const record of records) {
+      const item=assure(record.projectId,record.pole);
+      if (!item) continue;
+      item.records.push(record);
+      const n=Number(record.units);
+      if (!item.units && Number.isInteger(n) && n>=1 && n<=500) item.units=n;
+      if (!item.gps && record.gps && validGPS(Number(record.gps.lat),Number(record.gps.lng))) item.gps=record.gps;
+    }
+    for (const item of entries.values()) item.units ||= 1;
+    return {entries:[...entries.values()],projectEntries};
+  }
+  function summarize(item) {
+    const latest=new Map();
+    for (const r of item.records.slice().sort((a,b)=>new Date(b.date)-new Date(a.date))) {
+      const id=normal(r.insulatorId);
+      if (id&&!latest.has(id)) latest.set(id,r);
+    }
+    const inspected=[];
+    for(let i=1;i<=item.units;i++) {
+      const id=normal(item.pole+'-I'+String(i).padStart(2,'0'));
+      if (latest.has(id)) inspected.push(latest.get(id));
+    }
+    const damage=inspected.map(r=>Number(r.damage)).filter(n=>Number.isInteger(n)&&n>=0&&n<=5);
+    const worst=damage.length?Math.max(...damage):null;
+    const count=inspected.length;
+    let state='ยังไม่ตรวจ',color='#64748b';
+    if(count>0 && count<item.units) {state='ยังตรวจไม่ครบ';color='#a16207';}
+    else if(count===item.units) {state='ปกติ';color='#15803d';}
+    if(worst!==null && worst>=4) {state=(count<item.units?'พบความเสียหาย · ยังไม่ครบ':'พบความเสียหาย');color='#dc2626';}
+    else if(worst!==null && worst>=2) {state=(count<item.units?'เริ่มเสื่อม · ยังไม่ครบ':'เริ่มเสื่อม');color='#b45309';}
+    return {count,total:item.units,records:item.records.length,worst,state,color};
+  }
+  function findPole(pid,pole) {return snapshot().entries.find(e=>e.projectId===pid&&normal(e.pole)===normal(pole));}
+  function enhancePoleRows() {
+    const root=byId('v5PoleList');if(!root)return;
+    const entries=snapshot().entries.filter(e=>e.projectId===activeProjectId);
+    for(const row of root.querySelectorAll('.pole-row')) {
+      if(row.dataset.v5Enhanced==='yes') continue;
+      const pole=row.querySelector('b')?.textContent;
+      const item=entries.find(e=>normal(e.pole)===normal(pole));if(!item)continue;
+      const s=summarize(item);
+      const small=row.querySelector('small');
+      if(small) small.textContent='ลูกถ้วย '+s.total+' ลูก · ตรวจแล้ว '+s.count+'/'+s.total+' · ประวัติ '+s.records+' ครั้ง';
+      const badge=row.querySelector('.pole-state');
+      if(badge){badge.textContent='● '+s.state;badge.style.color=s.color;}
+      row.dataset.v5Enhanced='yes';
+    }
+  }
+  const poleList=byId('v5PoleList');
+  if(poleList) new MutationObserver(enhancePoleRows).observe(poleList,{childList:true});
+  function decorateDetail() {
+    const root=byId('v5PoleDetail');if(!root||root.querySelector('.v5-pole-progress'))return;
+    const head=root.querySelector('.pole-detail-head');if(!head)return;
+    const pole=clean(head.querySelector('h2')?.textContent);
+    const name=clean(head.querySelector('.mini-label')?.textContent);
+    const match=projects.find(p=>p.name===name&&hasProject(p.id)) || projects.find(p=>p.id===activeProjectId);
+    const item=match&&findPole(match.id,pole);
+    if(!item)return;
+    const s=summarize(item);
+    const box=document.createElement('div');box.className='v5-pole-progress';
+    const label=document.createElement('strong');label.textContent='สรุปเสา '+item.pole+' — '+s.state;label.style.color=s.color;
+    const text=document.createElement('p');text.textContent='ตรวจแล้ว '+s.count+' จาก '+s.total+' ลูก · คงเหลือ '+(s.total-s.count)+' ลูก · ประวัติ '+s.records+' ครั้ง';
+    const bar=document.createElement('div');bar.className='v5-progress-track';
+    const fill=document.createElement('div');fill.style.width=(s.count/s.total*100)+'%';bar.append(fill);
+    box.append(label,text,bar);
+    if(s.worst!==null){const worst=document.createElement('p');worst.textContent='ระดับความเสียหายสูงสุดในผลตรวจล่าสุดรายลูก: '+s.worst+'/5'+(s.count<s.total?' (ยังตรวจไม่ครบ)':'');box.append(worst);}
+    head.after(box);
+  }
+  const detail=byId('v5PoleDetail');
+  if(detail) new MutationObserver(decorateDetail).observe(detail,{childList:true});
+
+  // Single smart search on the map; existing history filtering remains intact.
+  function distanceMeters(a,b,lat,lng) {
+    const toRad=d=>d*Math.PI/180,dLat=toRad(Number(a)-lat),dLng=toRad(Number(b)-lng);
+    const h=Math.sin(dLat/2)**2+Math.cos(toRad(lat))*Math.cos(toRad(Number(a)))*Math.sin(dLng/2)**2;
+    return 6371000*2*Math.asin(Math.min(1,Math.sqrt(h)));
+  }
+  const searchBox=document.createElement('div');searchBox.className='card v5-smart-search';
+  const searchLabel=document.createElement('label');searchLabel.htmlFor='v5SmartQuery';searchLabel.textContent='🔎 ค้นหาอัจฉริยะ';
+  const searchInput=document.createElement('input');searchInput.id='v5SmartQuery';searchInput.type='search';searchInput.autocomplete='off';
+  searchInput.placeholder='โครงการ / รหัสเสา / ลูกถ้วย / ผู้ตรวจ / พิกัด';
+  const suggestion=document.createElement('div');suggestion.id='v5SmartResults';suggestion.setAttribute('aria-live','polite');
+  const hint=document.createElement('p');hint.className='note';hint.textContent='พิมพ์คำค้นแล้วเลือกเสาเพื่อดูบนแผนที่ หรือกดรายละเอียด · ค้นพิกัดคู่ในระยะประมาณ 15 ม.';
+  searchBox.append(searchLabel,searchInput,hint,suggestion);
+  const mapCard=byId('map')?.closest('.card');if(mapCard) mapCard.before(searchBox);
+
+  function focusPoleOnMap(item) {
+    if(!item.gps || !validGPS(Number(item.gps.lat),Number(item.gps.lng))) {V5.openPole(item.projectId,item.pole);return;}
+    locationState.target={projectId:item.projectId,pole:item.pole};
+    locationState.follow=false;
+    const select=byId('mapProject');if(select) select.value=item.projectId;
+    if(!isMapVisible()) window.go('mapPage');
+    setTimeout(()=>{
+      if(!isMapVisible())return;
+      if(select) select.value=item.projectId;
+      if(typeof loadMap==='function')loadMap();
+      if(map) map.setView([Number(item.gps.lat),Number(item.gps.lng)],Math.max(map.getZoom(),17));
+      locationState.follow=false;
+      const detail=byId('mapDetail');
+      if(detail){
+        detail.replaceChildren();
+        const title=document.createElement('h3');title.textContent='เสา '+item.pole;
+        const summary=document.createElement('p');const s=summarize(item);
+        summary.textContent='ตรวจแล้ว '+s.count+'/'+s.total+' ลูก · '+s.state;
+        const button=document.createElement('button');button.className='btn';button.textContent='📋 ดูรายละเอียดเสานี้';
+        button.addEventListener('click',()=>V5.openPole(item.projectId,item.pole));
+        detail.append(title,summary,button);
+      }
+      searchInput.blur();
+    },350);
+  }
+  function renderSearch() {
+    const q=normal(searchInput.value),data=snapshot();suggestion.replaceChildren();
+    if(!q)return;
+    const pair=q.match(/^(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)$/);
+    const pairValid=pair&&validGPS(Number(pair[1]),Number(pair[2]));
+    const ranked=[];
+    for(const p of data.projectEntries){
+      const hit=normal(p.name).includes(q)||normal(p.office).includes(q);
+      if(hit) ranked.push({score:normal(p.name)===q?120:50,item:p});
+    }
+    for(const item of data.entries){
+      const project=data.projectEntries.find(p=>p.projectId===item.projectId);
+      const pole=normal(item.pole), projectName=normal(project?.name), office=normal(project?.office);
+      const insIds=item.records.map(r=>normal(r.insulatorId));
+      const inspectors=item.records.map(r=>normal(r.inspector));
+      const lat=item.gps?.lat,lng=item.gps?.lng;
+      const coordinate=validGPS(Number(lat),Number(lng)) &&
+        (String(lat).includes(q)||String(lng).includes(q)||Number(lat).toFixed(6).includes(q)||Number(lng).toFixed(6).includes(q));
+      const near=pairValid&&item.gps&&distanceMeters(lat,lng,Number(pair[1]),Number(pair[2]))<=15;
+      const score=pole===q?110:pole.startsWith(q)?90:pole.includes(q)?75:
+        near?100:insIds.some(id=>id.includes(q))?65:inspectors.some(id=>id.includes(q))?55:
+        projectName.includes(q)?45:office.includes(q)?40:coordinate?35:0;
+      if(score)ranked.push({score,item});
+    }
+    ranked.sort((a,b)=>b.score-a.score||(a.item.pole||a.item.name).localeCompare(b.item.pole||b.item.name,'th'));
+    if(!ranked.length){const empty=document.createElement('p');empty.className='note';empty.textContent='ไม่พบข้อมูลที่ตรงกับคำค้นในเครื่องนี้';suggestion.append(empty);return;}
+    for(const {item} of ranked.slice(0,12)) {
+      const row=document.createElement('div');row.className='v5-search-row';
+      const main=document.createElement('button');main.type='button';main.className='v5-search-main';
+      if(item.type==='project'){
+        main.textContent='📁 '+item.name+' · '+item.office;
+        main.addEventListener('click',()=>{
+          const select=byId('mapProject');if(select)select.value=item.projectId;
+          locationState.target={projectId:item.projectId};locationState.follow=false;
+          if(!isMapVisible())window.go('mapPage');
+          setTimeout(()=>{if(select)select.value=item.projectId;loadMap();locationState.follow=false;},350);
+        });
+        row.append(main);
+      }else{
+        const s=summarize(item);
+        const p=data.projectEntries.find(p=>p.projectId===item.projectId);
+        main.textContent='📍 '+item.pole+' · '+(p?.name||'')+' · '+s.count+'/'+s.total+' ลูก · '+s.state;
+        main.addEventListener('click',()=>focusPoleOnMap(item));
+        const detailBtn=document.createElement('button');detailBtn.type='button';detailBtn.className='v5-search-detail';
+        detailBtn.textContent='รายละเอียด';detailBtn.addEventListener('click',()=>V5.openPole(item.projectId,item.pole));
+        row.append(main,detailBtn);
+      }
+      suggestion.append(row);
+    }
+  }
+  searchInput.addEventListener('input',renderSearch);
+  window.InsulatorV5Enhancements = {startTracking,stopTracking,renderSearch,snapshot,summarize};
 })();
