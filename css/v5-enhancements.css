@@ -1,0 +1,15 @@
+/* Safe extra styles; preserves the original blue/white V5 theme. */
+.v5-gps-toggle{margin-top:8px}
+.v5-smart-search{margin-bottom:15px}
+.v5-smart-search input{width:100%;box-sizing:border-box}
+#v5SmartResults{margin-top:8px;display:grid;gap:7px}
+.v5-search-row{display:flex;gap:6px;align-items:stretch;background:#f3f7ff;border:1px solid #e0eaf9;border-radius:11px;overflow:hidden}
+.v5-search-main{border:0;background:transparent;text-align:left;color:#163b70;flex:1;min-width:0;padding:11px 9px;font:inherit;font-size:13px;cursor:pointer}
+.v5-search-detail{border:0;border-left:1px solid #d4e2f5;background:#e6f0ff;color:#114a9a;font-weight:700;padding:8px;cursor:pointer;font-size:12px;white-space:nowrap}
+.v5-search-main:focus-visible,.v5-search-detail:focus-visible{outline:3px solid #126bdf;outline-offset:-3px}
+.v5-pole-progress{padding:13px 14px;margin:10px 0 19px;border:1px solid #dbe7f7;border-radius:13px;background:#f8fbff}
+.v5-pole-progress strong{font-size:15px}
+.v5-pole-progress p{margin:6px 0;font-size:13px;line-height:1.5;color:#425d80}
+.v5-progress-track{height:9px;background:#dbe6f4;border-radius:20px;overflow:hidden;margin:12px 0 5px}
+.v5-progress-track>div{height:100%;background:#2678df;border-radius:20px}
+@media(max-width:420px){.v5-search-detail{padding:6px}.v5-search-main{padding:10px 7px}}
