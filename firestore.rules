@@ -42,9 +42,11 @@ service cloud.firestore {
 
     match /sharedProjects/{pid} {
       // Query must use where('memberUids','array-contains',currentUid).
-      allow get, list: if approvedStaff()
+      allow get: if approvedStaff()
         && request.auth.uid in resource.data.memberUids
         && request.auth.uid in resource.data.members;
+      allow list: if approvedStaff()
+        && request.auth.uid in resource.data.memberUids;
 
       allow create: if approvedStaff()
         && request.resource.data.id == pid
@@ -61,7 +63,8 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.members[request.auth.uid] == 'owner'
         && request.resource.data.memberUids.hasAll([request.auth.uid])
-        && request.resource.data.memberUids.size() <= 50;
+        && request.resource.data.memberUids.size() <= 50
+        && request.resource.data.memberUids.toSet() == request.resource.data.members.keys().toSet();
 
       allow delete: if false;
 
