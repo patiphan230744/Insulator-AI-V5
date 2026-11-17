@@ -139,7 +139,7 @@ function renderDetails(){
   expand.append(summary);
   if(!items.length)expand.append(node("p","ยังไม่มีผลตรวจ"));
   for(const r of items.slice().sort((a,b)=>esc(b.date).localeCompare(esc(a.date))).slice(0,50)){
-   expand.append(node("p",new Date(r.date).toLocaleString("th-TH")+" · "+(r.insulatorId||"ไม่ระบุลูก")+" · ความเสียหาย "+r.damage+"/5 · "+(r.inspector||""),"v5-shared-record"));
+   expand.append(node("p",new Date(r.date).toLocaleString("th-TH")+" · "+(r.insulatorId||"ไม่ระบุลูก")+" · ความเสียหาย "+r.damage+"/5 · "+(r.inspector||"")+(r.demo?" · DEMO":""),"v5-shared-record"));
   }
   row.append(expand);poles.append(row);
  }
@@ -173,7 +173,7 @@ function listenProjects(){
 }
 function onAuth(u){
  const generation=++state.authGeneration;stopAll();
- if(!u){show("ลงชื่อเข้าใช้ Firebase เพื่อใช้โครงการส่วนรวม");return;}
+ if(!u){show("ลงชื่อเข้าใช้ Firebase เพื่อใช้โครงการส่วนรวม");if(byId("scan")?.classList.contains("active")||byId("mapPage")?.classList.contains("active")||byId("projectsPage")?.classList.contains("active")||byId("history")?.classList.contains("active")||byId("poleDetail")?.classList.contains("active"))window.go("settings");return;}
  state.uid=u.uid;
  byId("v5OwnUid").textContent=u.uid;
  show("ตรวจสิทธิ์เจ้าหน้าที่กับ Firestore...");
@@ -186,7 +186,7 @@ function onAuth(u){
    return;
   }
   if(!state.approved){state.approved=true;document.documentElement.classList.add("v5-staff-approved");listenProjects();}
- },error=>{if(generation===state.authGeneration){state.approved=false;document.documentElement.classList.remove("v5-staff-approved");show("ตรวจสิทธิ์ไม่ได้: "+error.message);}});
+ },error=>{if(generation===state.authGeneration){state.approved=false;document.documentElement.classList.remove("v5-staff-approved");if(state.projectsOff)state.projectsOff();state.projectsOff=null;stopProject();state.projects.clear();renderSharedProjects();show("ตรวจสิทธิ์ไม่ได้: "+error.message);}});
 }
 async function shareLocalProject(){
  try{
