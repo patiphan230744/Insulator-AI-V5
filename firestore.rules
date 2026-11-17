@@ -1,0 +1,99 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Create staffApprovals/{uid} with {active: true} from Firebase Console.
+    // Client applications cannot approve themselves or other accounts.
+    function approvedStaff() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/staffApprovals/$(request.auth.uid))
+        && get(/databases/$(database)/documents/staffApprovals/$(request.auth.uid)).data.active == true;
+    }
+
+    function sharedProject(pid) {
+      return get(/databases/$(database)/documents/sharedProjects/$(pid)).data;
+    }
+
+    function member(pid) {
+      return approvedStaff()
+        && request.auth.uid in sharedProject(pid).memberUids
+        && request.auth.uid in sharedProject(pid).members;
+    }
+
+    function canEdit(pid) {
+      return member(pid) && sharedProject(pid).members[request.auth.uid] in ['owner', 'editor'];
+    }
+
+    // Preserve legacy per-user backup collections from Insulator AI V4/V5.
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+      match /{nested=**} {
+        allow read, write: if signedIn() && request.auth.uid == uid;
+      }
+    }
+
+    match /staffApprovals/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow list, create, update, delete: if false;
+    }
+
+    match /sharedProjects/{pid} {
+      // Query must use where('memberUids','array-contains',currentUid).
+      allow get, list: if approvedStaff()
+        && request.auth.uid in resource.data.memberUids
+        && request.auth.uid in resource.data.members;
+
+      allow create: if approvedStaff()
+        && request.resource.data.id == pid
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.memberUids == [request.auth.uid]
+        && request.resource.data.members.keys().hasOnly([request.auth.uid])
+        && request.resource.data.members[request.auth.uid] == 'owner';
+
+      // Only owner can add/remove members. Project ownership and creation date stay fixed.
+      allow update: if approvedStaff()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.id == pid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.members[request.auth.uid] == 'owner'
+        && request.resource.data.memberUids.hasAll([request.auth.uid])
+        && request.resource.data.memberUids.size() <= 50;
+
+      allow delete: if false;
+
+      match /poles/{poleId} {
+        allow get, list: if member(pid);
+        allow create, update: if canEdit(pid)
+          && request.resource.data.projectId == pid
+          && request.resource.data.updatedByUid == request.auth.uid
+          && request.resource.data.pole is string
+          && request.resource.data.units is int
+          && request.resource.data.units >= 1
+          && request.resource.data.units <= 500;
+        allow delete: if false;
+      }
+
+      match /inspections/{inspectionId} {
+        allow get, list: if member(pid);
+        // Inspection history is append-only to prevent edits to other people's results.
+        allow create: if canEdit(pid)
+          && request.resource.data.projectId == pid
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.id == inspectionId
+          && request.resource.data.pole is string
+          && request.resource.data.date is string
+          && request.resource.data.imageInCloud == false
+          && !request.resource.data.keys().hasAny(['image']);
+        allow update, delete: if false;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
